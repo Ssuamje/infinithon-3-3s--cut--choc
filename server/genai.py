@@ -7,11 +7,17 @@ from io import BytesIO
 from datetime import datetime
 
 
+INTERVAL_THRESHOLD = 60  # seconds
+IDEAL_BLINK_PER_MINUTE = 10
+MIN_LOG_NUM = 5
+
+
 # Set your OpenAI API key
 client = openai.OpenAI(
     # This is the default and can be omitted
     api_key=os.environ.get("OPENAI_API_KEY"),
 )
+
 
 def get_weather_forecast():
     """
@@ -58,6 +64,8 @@ def analyze_tablet_data(data):
     # Create a DataFrame
     data_rows = []
     for hour, blinks in blink_counts.items():
+        if blinks < MIN_LOG_NUM:
+            continue
         data_rows.append({
             "ID": len(data_rows) + 1,
             "DATE": hour.date(),
@@ -69,40 +77,59 @@ def analyze_tablet_data(data):
     # TODO: interpolate logs where there are no enough blinks in a given hour
     return df
 
-def plot_blink_data(data: pd.DataFrame, date: str):
+def clean_and_slide_data(data: pd.DataFrame, date: str) -> pd.DataFrame:
+    """
+    Clean and slide the blink data.
+    :param data: DataFrame containing the blink data.
+    :return: Cleaned and slid DataFrame.
+    """
+    # Filter data for the given date
+    filtered_df = data[pd.to_datetime(data['TIMESTAMP']).dt.date == datetime.strptime(date, "%Y-%m-%d").date()]
+    if filtered_df.empty:
+        print(f"No data available for {date}")
+        return
+    print(len(filtered_df), "rows gathered this session")
+
+    filtered_df['TIMESTAMP'] = pd.to_datetime(filtered_df['TIMESTAMP'])
+    filtered_df['BLINK_INTERVAL'] = filtered_df.TIMESTAMP.diff()
+    filtered_df['BLINK_INTERVAL'] = filtered_df['BLINK_INTERVAL'].dt.seconds
+    filtered_df['BLINK_PER_MINUTE'] = 60 / filtered_df['BLINK_INTERVAL']
+    filtered_df.dropna(inplace=True)
+    filtered_df = filtered_df[filtered_df['BLINK_INTERVAL'] < INTERVAL_THRESHOLD]
+    
+    min_filter = (filtered_df.groupby(pd.Grouper(key='TIMESTAMP', freq='h'))['BLINK_PER_MINUTE'].count() >= MIN_LOG_NUM).values
+    grouped = filtered_df.groupby(pd.Grouper(key='TIMESTAMP', freq='h'))['BLINK_PER_MINUTE'].mean()
+    grouped = grouped[min_filter]
+    grouped.index = grouped.index.strftime('%H')
+    
+    return grouped
+
+def plot_blink_data(cleaned_data: pd.DataFrame, date: str):
     """
     Function to plot blink data.
     :param data: DataFrame containing the blink data.
     :return: None
     """
-    # Filter data for the given date
-    df = data[pd.to_datetime(data['TIMESTAMP']).dt.date == datetime.strptime(date, "%Y-%m-%d").date()]
-    if df.empty:
-        print(f"No data available for {date}")
-        return
-    print(len(df), "rows gathered this session")
-
-    df['TIMESTAMP'] = pd.to_datetime(df['TIMESTAMP'])
-    grouped = df.groupby(pd.Grouper(key='TIMESTAMP', freq='h'))['ID'].count()
-    grouped.index = grouped.index.strftime('%H:%M')
-
-    sns.set_theme(style="white")
+    # Plot the blink data
+    sns.set_theme(style="whitegrid")
     plt.figure(figsize=(4, 3))
-    sns.lineplot(data=grouped, marker='o', color='b', linewidth=2.5)
+    sns.lineplot(data=cleaned_data, marker='o', color='b', linewidth=2.5)
 
-    # Rotate x ticks to 30 degrees
+    # Rotate x ticks
     plt.xticks(rotation=45)
+    lower_y = int(cleaned_data.min()) - 1 if cleaned_data.min() < IDEAL_BLINK_PER_MINUTE else IDEAL_BLINK_PER_MINUTE - 1
+    upper_y = int(cleaned_data.max()) + 1 if cleaned_data.max() > IDEAL_BLINK_PER_MINUTE else IDEAL_BLINK_PER_MINUTE + 1
+    plt.ylim(lower_y, upper_y)
 
     # Remove x and y labels
     plt.xlabel('')
     plt.ylabel('')
 
-    # Adjust y tick interval to 100
-    plt.yticks(range(0, grouped.max(), 100))
-
     # Draw a horizontal red line at y=100 with low opacity
-    plt.axhline(y=600, color='deepskyblue', linestyle='--', alpha=0.5)
-    plt.text(grouped.index[-1], 600, '😊', fontsize=14, ha='center', va='bottom', color='deepskyblue')
+    plt.axhline(y=IDEAL_BLINK_PER_MINUTE, color='deepskyblue', linestyle='--', alpha=0.5)
+
+    # Draw the emoji with the specified font
+    plt.text(cleaned_data.index[-1], IDEAL_BLINK_PER_MINUTE, '😊', fontsize=14, ha='center', va='bottom', color='deepskyblue')
 
     # Remove grid and axis lines
     sns.despine(left=False, bottom=False)
@@ -167,7 +194,9 @@ def generate_report(raw_data: pd.DataFrame, data: pd.DataFrame) -> str:
     # Plot the blink data
     # date = datetime.now().strftime("%Y-%m-%d")
     date = datetime.now().strftime("2025-08-08")
-    image = plot_blink_data(raw_data, date)
+    cleaned_data = clean_and_slide_data(raw_data, date)
+    image = plot_blink_data(cleaned_data, date)
+    daily_bpm = cleaned_data.mean() if not cleaned_data.empty else 0
 
     # Generate the report text
     report_text = generate_report_text(data)
@@ -175,6 +204,7 @@ def generate_report(raw_data: pd.DataFrame, data: pd.DataFrame) -> str:
     # Return the report text and image
     return {
         "report": report_text,
+        "daily_blink_per_minute": daily_bpm,
         "daily_line_plot": image
     }
 
