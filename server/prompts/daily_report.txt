@@ -1,0 +1,8 @@
+Today is "{today}"
+
+This is my daily logs about my eye blinking:
+{data}
+
+How's my health of eyes? Did I blinked my eyes well today? How's it compared to other days in past?
+
+Also encourage me with some positive remarks, or some funny words.
