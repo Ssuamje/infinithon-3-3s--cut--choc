@@ -28,10 +28,12 @@ export const GameUI: React.FC<GameUIProps> = ({
       <div style={styles.statusRow}>
         <div style={styles.statusItem}>
           <span style={styles.label}>상태:</span>
-          <span style={{
-            ...styles.statusValue,
-            color: isAlive ? "#21c074" : "#ff5050"
-          }}>
+          <span
+            style={{
+              ...styles.statusValue,
+              color: isAlive ? "#21c074" : "#ff5050",
+            }}
+          >
             {isAlive ? "생존" : "사망"}
           </span>
         </div>
@@ -45,13 +47,13 @@ export const GameUI: React.FC<GameUIProps> = ({
       <div style={styles.heartsContainer}>
         <span style={styles.label}>생명:</span>
         <div style={styles.hearts}>
-          {[1, 2, 3].map(i => (
+          {[1, 2, 3].map((i) => (
             <span
               key={i}
               style={{
                 ...styles.heart,
                 opacity: i <= hearts ? 1 : 0.3,
-                color: i <= hearts ? "#ff5050" : "#ccc"
+                color: i <= hearts ? "#ff5050" : "#ccc",
               }}
             >
               ❤️
@@ -63,11 +65,13 @@ export const GameUI: React.FC<GameUIProps> = ({
       {/* 콤보 표시 */}
       {isAlive && combo > 0 && (
         <div style={styles.comboContainer}>
-          <div style={{
-            ...styles.combo,
-            transform: `scale(${Math.min(1.5, 1 + combo * 0.05)})`,
-            color: combo > 10 ? "#ff6b35" : combo > 5 ? "#f7b731" : "#21c074"
-          }}>
+          <div
+            style={{
+              ...styles.combo,
+              transform: `scale(${Math.min(1.5, 1 + combo * 0.05)})`,
+              color: combo > 10 ? "#ff6b35" : combo > 5 ? "#f7b731" : "#21c074",
+            }}
+          >
             {combo} COMBO!
           </div>
           <div style={styles.comboMultiplier}>
@@ -84,7 +88,7 @@ export const GameUI: React.FC<GameUIProps> = ({
             <div
               style={{
                 ...styles.revivalProgress,
-                width: `${(revivalProgress / revivalRequired) * 100}%`
+                width: `${(revivalProgress / revivalRequired) * 100}%`,
               }}
             />
           </div>
@@ -111,9 +115,9 @@ const styles: Record<string, React.CSSProperties> = {
   gameUI: {
     background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
     color: "white",
-    padding: 20,
-    borderRadius: 15,
-    marginBottom: 20,
+    padding: "clamp(12px, 3vw, 20px)", // 반응형 padding
+    borderRadius: "clamp(8px, 2vw, 15px)", // 반응형 border-radius
+    marginBottom: "clamp(12px, 3vw, 20px)", // 반응형 margin
     fontFamily: "system-ui, -apple-system, sans-serif",
     boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
   },
@@ -121,26 +125,26 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 15,
+    marginBottom: "clamp(10px, 2.5vw, 15px)", // 반응형 margin
   },
   statusItem: {
     display: "flex",
     alignItems: "center",
-    gap: 8,
+    gap: "clamp(6px, 1.5vw, 8px)", // 반응형 gap
   },
   label: {
-    fontSize: 14,
+    fontSize: "clamp(12px, 2.5vw, 14px)", // 반응형 폰트 크기
     fontWeight: 500,
     opacity: 0.9,
   },
   statusValue: {
-    fontSize: 16,
+    fontSize: "clamp(14px, 3vw, 16px)", // 반응형 폰트 크기
     fontWeight: "bold",
     textTransform: "uppercase",
     letterSpacing: "1px",
   },
   scoreValue: {
-    fontSize: 24,
+    fontSize: "clamp(18px, 4vw, 24px)", // 반응형 폰트 크기
     fontWeight: "bold",
     color: "#f7b731",
     textShadow: "0 2px 4px rgba(0,0,0,0.3)",
@@ -148,89 +152,89 @@ const styles: Record<string, React.CSSProperties> = {
   heartsContainer: {
     display: "flex",
     alignItems: "center",
-    gap: 10,
-    marginBottom: 15,
+    gap: "clamp(6px, 2vw, 10px)", // 반응형 gap
+    marginBottom: "clamp(10px, 2.5vw, 15px)", // 반응형 margin
   },
   hearts: {
     display: "flex",
-    gap: 5,
+    gap: "clamp(3px, 1vw, 5px)", // 반응형 gap
   },
   heart: {
-    fontSize: 24,
+    fontSize: "clamp(18px, 4vw, 24px)", // 반응형 폰트 크기
     transition: "all 0.3s ease",
     filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.3))",
   },
   comboContainer: {
     textAlign: "center",
-    marginBottom: 15,
+    marginBottom: "clamp(10px, 2.5vw, 15px)", // 반응형 margin
     animation: "pulse 0.5s ease-in-out",
   },
   combo: {
-    fontSize: 32,
+    fontSize: "clamp(24px, 5vw, 32px)", // 반응형 폰트 크기
     fontWeight: "bold",
     textShadow: "0 3px 6px rgba(0,0,0,0.4)",
     transition: "all 0.3s ease",
-    marginBottom: 5,
+    marginBottom: "clamp(3px, 1vw, 5px)", // 반응형 margin
   },
   comboMultiplier: {
-    fontSize: 14,
+    fontSize: "clamp(11px, 2.5vw, 14px)", // 반응형 폰트 크기
     opacity: 0.8,
     fontWeight: "500",
   },
   revivalContainer: {
     textAlign: "center",
-    marginBottom: 20,
-    padding: 15,
+    marginBottom: "clamp(12px, 3vw, 20px)", // 반응형 margin
+    padding: "clamp(10px, 2.5vw, 15px)", // 반응형 padding
     background: "rgba(0,0,0,0.2)",
-    borderRadius: 10,
+    borderRadius: "clamp(6px, 1.5vw, 10px)", // 반응형 border-radius
   },
   revivalTitle: {
-    fontSize: 18,
+    fontSize: "clamp(14px, 3.5vw, 18px)", // 반응형 폰트 크기
     fontWeight: "bold",
-    marginBottom: 10,
+    marginBottom: "clamp(6px, 1.5vw, 10px)", // 반응형 margin
     color: "#ff5050",
   },
   revivalBar: {
     width: "100%",
-    height: 8,
+    height: "clamp(6px, 1.5vw, 8px)", // 반응형 높이
     background: "rgba(255,255,255,0.2)",
-    borderRadius: 4,
+    borderRadius: "clamp(3px, 1vw, 4px)", // 반응형 border-radius
     overflow: "hidden",
-    marginBottom: 8,
+    marginBottom: "clamp(6px, 1.5vw, 8px)", // 반응형 margin
   },
   revivalProgress: {
     height: "100%",
     background: "linear-gradient(90deg, #ff5050, #ff6b35)",
-    borderRadius: 4,
+    borderRadius: "clamp(3px, 1vw, 4px)", // 반응형 border-radius
     transition: "width 0.3s ease",
   },
   revivalText: {
-    fontSize: 14,
+    fontSize: "clamp(11px, 2.5vw, 14px)", // 반응형 폰트 크기
     fontWeight: "500",
   },
   controls: {
     display: "flex",
-    gap: 10,
+    gap: "clamp(6px, 2vw, 10px)", // 반응형 gap
     justifyContent: "center",
   },
   dangerButton: {
-    padding: "8px 16px",
+    padding: "clamp(6px 12px, 1.5vw 3vw, 8px 16px)", // 반응형 padding
     background: "#ff5050",
     color: "white",
     border: "none",
-    borderRadius: 6,
-    fontSize: 12,
+    borderRadius: "clamp(4px, 1vw, 6px)", // 반응형 border-radius
+    fontSize: "clamp(10px, 2.5vw, 12px)", // 반응형 폰트 크기
     fontWeight: "500",
     cursor: "pointer",
     transition: "all 0.2s ease",
   },
   resetButton: {
-    padding: "8px 16px",
+    padding: "clamp(6px 12px, 1.5vw 3vw, 8px 16px)", // 반응형 padding
     background: "#21c074",
     color: "white",
     border: "none",
-    borderRadius: 6,
-    fontSize: 12,
+    borderRadius: "clamp(4px, 1vw, 6px)", // 반응형 border-radius
+    fontSize: "clamp(10px, 2.5vw, 12px)", // 반응형 폰트 크기
     fontWeight: "500",
     cursor: "pointer",
     transition: "all 0.2s ease",

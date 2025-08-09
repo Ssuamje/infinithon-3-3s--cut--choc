@@ -31,7 +31,10 @@
     "lib": ["ES2023"], // 브라우저 API 필요 없음
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
     "types": ["node", "electron"],
-    "module": "CommonJS"
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "outDir": "./dist-electron",
+    "noEmit": false
   },
   "include": ["electron"],
   "exclude": ["src"]

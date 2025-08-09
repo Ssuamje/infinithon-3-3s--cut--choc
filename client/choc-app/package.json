@@ -3,13 +3,17 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "main": "dist-electron/electron/main.js",
   "scripts": {
     "dev": "vite",
+    "dev:electron": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && VITE_DEV_SERVER_URL=http://localhost:5173 electron dist-electron/electron/main.js\"",
+    "dev:https": "concurrently \"npm run dev\" \"local-ssl-proxy --source 3001 --target 5173\"",
     "lint": "eslint .",
     "preview": "vite preview",
     "build:ui": "vite build",
     "build:electron": "tsc -p tsconfig.node.json",
-    "build": "npm run build:ui && npm run build:electron"
+    "build": "npm run build:ui && npm run build:electron",
+    "electron": "electron dist-electron/electron/main.js"
   },
   "dependencies": {
     "@electron/remote": "^2.1.3",
