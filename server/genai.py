@@ -221,8 +221,8 @@ def generate_report(raw_data: pd.DataFrame, user_info: dict = None) -> str:
     :return: A generated report as a string.
     """
     # Plot the blink data
-    # date = datetime.now().strftime("%Y-%m-%d")
-    date = datetime.now().strftime("2025-08-08")
+    date = datetime.now().strftime("%Y-%m-%d")
+    # date = datetime.now().strftime("2025-08-10")
     slided_data, cleaned_data = clean_and_slide_data(raw_data, date)
     image = plot_blink_data(cleaned_data, date)
     daily_bpm = (cleaned_data.mean() if cleaned_data is not None and not cleaned_data.empty else 0)
