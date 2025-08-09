@@ -28,5 +28,5 @@ async def send_processed_data(request_id: str):
         return {"message": "No data found for the given request ID"}
     # processed_data = analyze_tablet_data(data_store[request_id]['state'])
     # report = generate_report(processed_data)
-    processed_data = data_store[request_id]
-    return data_store[request_id]
+    report = data_store[request_id]
+    return {"report": report, "request_id": request_id}
