@@ -32,7 +32,6 @@ def analyze_tablet_data(data):
     for line in data.splitlines()[1:]: # Skip header line
         if line.strip():  # Check if line is not empty
             id_, timestamp = line.strip().split(",")
-            print(timestamp.replace("Z", "+00:00"))
             parsed_timestamp = datetime.datetime.fromisoformat(timestamp.strip().replace("Z", "+00:00"))
             timestamps.append(parsed_timestamp)
     
@@ -59,21 +58,31 @@ def analyze_tablet_data(data):
     # TODO: interpolate logs where there are no enough blinks in a given hour
     return df
 
+def get_weather_forecast():
+    """
+    Function to get the weather forecast for tomorrow.
+    This is a placeholder function. You can replace it with actual API calls to a weather service.
+    :return: A string representing the weather forecast for tomorrow.
+    """
+    # Example static response, replace with actual API call
+    return "맑음, 기온 25도, 습도 20%, 미세먼지 매우 나쁨"
+
 def generate_report(data: str) -> str:
     """
     Function to analyze tablet data using ChatGPT.
     :param data: A string representation of the tablet data.
     :return: A generated report as a string.
     """
-    today = datetime.date.today().strftime("%Y-%m-%d")
+    today = datetime.date.today().strftime("%Y-%m-%d %H:%M:%S")
+    weather = get_weather_forecast()
 
-    with open('prompts/dev_prompt.txt', 'r') as file:
-        dev_prompt = file.read()
     with open('prompts/system_prompt.txt', 'r') as file:
-        system_prompt = file.read()
+        system_prompt = file.read().format(today=today, data=data, weather=weather)
     with open('prompts/daily_report.txt', 'r') as file:
         prompt = file.read()
-        prompt = prompt.format(today=today, data=data)
+        prompt = prompt
+    print("System Prompt:", system_prompt)
+    print("-------------------------------------")
 
     try:
         completion = client.chat.completions.create(
@@ -83,14 +92,13 @@ def generate_report(data: str) -> str:
                     "role": "system", "content": system_prompt
                 },
                 {
-                    "role": "developer", "content": dev_prompt
-                },
-                {
                     "role": "user",
                     "content": prompt,
                 },
             ],
             max_tokens=1500,
+            temperature=0.8,
+            top_p=0.9,
         )
         report = completion.choices[0].message.content
         return report
@@ -101,6 +109,16 @@ def generate_report(data: str) -> str:
 if __name__ == "__main__":
     # Replace this with your actual tablet data
     raw_data = """ID, TIMESTAMP_EYE_BLINKED
+    1, 2025-08-07T03:06:30.872100Z
+    2, 2025-08-07T03:07:10.582484Z
+    3, 2025-08-07T03:07:30.872100Z
+    4, 2025-08-07T03:07:51.582484Z
+    1, 2025-08-07T03:07:33.224359Z
+    2, 2025-08-08T03:07:43.872100Z
+    3, 2025-08-08T03:07:45.582484Z
+    4, 2025-08-08T03:07:49.872100Z
+    5, 2025-08-08T03:07:51.582484Z
+    6, 2025-08-08T03:07:52.224359Z
     1, 2025-08-09T03:07:48.872100Z
     2, 2025-08-09T03:07:49.582484Z
     3, 2025-08-09T03:07:50.872100Z
