@@ -1,45 +1,74 @@
+# server/main.py
 import time
-from fastapi import FastAPI, Depends
-from pydantic import BaseModel
+import asyncio
+import pandas as pd
 from typing import Dict
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
-from genai import analyze_tablet_data, generate_report
-import uuid
+# (패키지/모듈 실행 모두 대응)
+try:
+    from genai import analyze_tablet_data, generate_report
+except Exception:
+    print("Error importing genai functions. Ensure genai directory is in the same directory or properly installed.")
+    analyze_tablet_data = None
+    generate_report = None
 
-app = FastAPI()
-
-# 데이터 모델 정의
 class BlinkSession(BaseModel):
     id: str
-    events: list[str]  # 타임스탬프 리스트
+    events: list[str]
     startedAt: str
     endedAt: str
 
-# 요청 데이터를 저장할 임시 메모리 저장소 (예: 데이터베이스 대신 사용)
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],       # ex) ["http://localhost:5173"]
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 data_store: Dict[str, Dict] = {}
 
-@app.on_event("startup")
-async def cleanup_data_store():
+async def cleanup_loop():
+    """1시간 이상 된 항목 정리 루프 (백그라운드 태스크)"""
     while True:
-        current_time = time.time()
-        keys_to_delete = [key for key, value in data_store.items() if current_time - value["timestamp"] > 3600]
-        for key in keys_to_delete:
-            del data_store[key]
-        await asyncio.sleep(3600)  # 1시간마다 정리
+        now = time.time()
+        to_delete = [k for k, v in data_store.items() if now - v["timestamp"] > 3600]
+        for k in to_delete:
+            data_store.pop(k, None)
+        await asyncio.sleep(3600)
 
-# 클라이언트 → 서버: 데이터 수신
+@app.on_event("startup")
+async def on_startup():
+    asyncio.create_task(cleanup_loop())
+
 @app.post("/blink-data/")
 async def receive_blink_data(data: BlinkSession):
-    timestamp = time.time()
-    data_store[data.id] = data.events
-    return {"message": "Data received and processed successfully", "id": data.id, "timestamp": timestamp}
+    ts = time.time()
+    print("=== blink-data 수신 ===")
+    print(f"id: {data.id}")
+    print(f"events: {data.events}")
+    print(f"startedAt: {data.startedAt}")
+    print(f"endedAt: {data.endedAt}")
+    print("======================")
+    data_store[data.id] = {"payload": data.dict(), "timestamp": ts}
+    return {"message": "Data received and processed successfully", "id": data.id, "timestamp": ts}
 
-# 서버 → 클라이언트: 가공된 데이터 전송
 @app.get("/processed-data/{request_id}")
 async def send_processed_data(request_id: str):
-    if request_id not in data_store:
+    saved = data_store.get(request_id)
+    if not saved:
         return {"message": "No data found for the given request ID"}
-    # processed_data = analyze_tablet_data(data_store[request_id]['state'])
-    # report = generate_report(processed_data)
-    report = data_store[request_id]
-    return {"report": report}
+
+    # 필요하면 여기서 실제 분석 호출
+    if analyze_tablet_data and generate_report:
+        preprocessed_data = pd.DataFrame({"TIMESTAMP": saved['payload']['events']})
+        analyzed = analyze_tablet_data(preprocessed_data)
+        report = generate_report(preprocessed_data, analyzed)
+        return report # {"report": report['report_text'], "image": report['image']}
+    else:
+        return {"message": "Analysis functions are not available."}

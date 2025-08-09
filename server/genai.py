@@ -1,7 +1,11 @@
 import os
-import datetime
 import openai
 import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+from io import BytesIO
+from datetime import datetime
+
 
 # Set your OpenAI API key
 client = openai.OpenAI(
@@ -9,31 +13,38 @@ client = openai.OpenAI(
     api_key=os.environ.get("OPENAI_API_KEY"),
 )
 
+def get_weather_forecast():
+    """
+    Function to get the weather forecast for tomorrow.
+    This is a placeholder function. You can replace it with actual API calls to a weather service.
+    :return: A string representing the weather forecast for tomorrow.
+    """
+    # Example static response, replace with actual API call
+    return "맑음, 기온 25도, 습도 20%, 미세먼지 매우 나쁨"
+
+def load_blink_data(file_path: str) -> str:
+    """
+    Load blink data from a CSV file.
+    :param file_path: Path to the CSV file containing blink data.
+    :return: A string representation of the blink data.
+    """
+    try:
+        df = pd.read_csv(file_path)
+        return df
+    except Exception as e:
+        return f"An error occurred while loading the data: {e}"
+
 def analyze_tablet_data(data):
     # Expected output dataframe format:
     # ID, DATE, HOUR, BLINKS_PER_HOUR
     # 1, "2025-08-06", 3, 400
     # 2, "2025-08-06", 4, 300
     # 3, "2025-08-06", 5, 350
-    # 4, "2025-08-06", 6, 250
-    # 5, "2025-08-06", 7, 400
-    # 6, "2025-08-08", 3, 200
-    # 7, "2025-08-08", 4, 300
-    # 8, "2025-08-08", 5, 300
-    # 9, "2025-08-08", 6, 400
-    # 10, "2025-08-08", 7, 350
-    # 11, "2025-08-09", 3, 500
-    # 12, "2025-08-09", 4, 400
-    # 13, "2025-08-09", 5, 600
-    # 14, "2025-08-09", 6, 450
-    # 15, "2025-08-09", 7, 550
 
     timestamps = []
-    for line in data.splitlines()[1:]: # Skip header line
-        if line.strip():  # Check if line is not empty
-            id_, timestamp = line.strip().split(",")
-            parsed_timestamp = datetime.datetime.fromisoformat(timestamp.strip().replace("Z", "+00:00"))
-            timestamps.append(parsed_timestamp)
+    for i, row in data.iterrows(): # Skip header line
+        parsed_timestamp = datetime.fromisoformat(row.TIMESTAMP.strip().replace("Z", "+00:00"))
+        timestamps.append(parsed_timestamp)
     
     # Example processing: Count blinks per hour
     # Count blinks per hour
@@ -58,30 +69,72 @@ def analyze_tablet_data(data):
     # TODO: interpolate logs where there are no enough blinks in a given hour
     return df
 
-def get_weather_forecast():
+def plot_blink_data(data: pd.DataFrame, date: str):
     """
-    Function to get the weather forecast for tomorrow.
-    This is a placeholder function. You can replace it with actual API calls to a weather service.
-    :return: A string representing the weather forecast for tomorrow.
+    Function to plot blink data.
+    :param data: DataFrame containing the blink data.
+    :return: None
     """
-    # Example static response, replace with actual API call
-    return "맑음, 기온 25도, 습도 20%, 미세먼지 매우 나쁨"
+    # Filter data for the given date
+    df = data[pd.to_datetime(data['TIMESTAMP']).dt.date == datetime.strptime(date, "%Y-%m-%d").date()]
+    if df.empty:
+        print(f"No data available for {date}")
+        return
+    print(len(df), "rows gathered this session")
 
-def generate_report(data: str) -> str:
+    df['TIMESTAMP'] = pd.to_datetime(df['TIMESTAMP'])
+    grouped = df.groupby(pd.Grouper(key='TIMESTAMP', freq='h'))['ID'].count()
+    grouped.index = grouped.index.strftime('%H:%M')
+
+    sns.set_theme(style="white")
+    plt.figure(figsize=(4, 3))
+    sns.lineplot(data=grouped, marker='o', color='b', linewidth=2.5)
+
+    # Rotate x ticks to 30 degrees
+    plt.xticks(rotation=45)
+
+    # Remove x and y labels
+    plt.xlabel('')
+    plt.ylabel('')
+
+    # Adjust y tick interval to 100
+    plt.yticks(range(0, grouped.max(), 100))
+
+    # Draw a horizontal red line at y=100 with low opacity
+    plt.axhline(y=600, color='deepskyblue', linestyle='--', alpha=0.5)
+    plt.text(grouped.index[-1], 600, '😊', fontsize=14, ha='center', va='bottom', color='deepskyblue')
+
+    # Remove grid and axis lines
+    sns.despine(left=False, bottom=False)
+
+    plt.tight_layout()
+    image_buffer = BytesIO()
+    plt.savefig(image_buffer, format='png', bbox_inches='tight')
+    image_buffer.seek(0)
+    image = image_buffer.getvalue()
+    image_buffer.close()
+    plt.close()
+
+    return image
+
+def generate_report_text(data: pd.DataFrame) -> str:
     """
     Function to analyze tablet data using ChatGPT.
-    :param data: A string representation of the tablet data.
+    :param data: DataFrame containing the blink data.
     :return: A generated report as a string.
     """
-    today = datetime.date.today().strftime("%Y-%m-%d %H:%M:%S")
+    # today = datetime.date.today().strftime("%Y-%m-%d %H:%M:%S")
+    today = "2025-08-10 11:13:01"
     weather = get_weather_forecast()
 
+    text_data = "DATE, HOUR, BLINKS_PER_HOUR\n" + \
+        "\n".join(", ".join([row.DATE.strftime("%Y-%m-%d"), str(row.HOUR), str(row.BLINKS_PER_HOUR)]) for _, row in data.iterrows())
     with open('prompts/system_prompt.txt', 'r') as file:
-        system_prompt = file.read().format(today=today, data=data, weather=weather)
+        system_prompt = file.read().format(today=today, data=text_data, weather=weather)
     with open('prompts/daily_report.txt', 'r') as file:
         prompt = file.read()
         prompt = prompt
-    print("System Prompt:", system_prompt)
+    print("System Prompt:\n", system_prompt)
     print("-------------------------------------")
 
     try:
@@ -105,28 +158,32 @@ def generate_report(data: str) -> str:
     except Exception as e:
         return f"An error occurred: {e}"
 
+def generate_report(raw_data: pd.DataFrame, data: pd.DataFrame) -> str:
+    """
+    Function to generate a report from the blink data.
+    :param data: DataFrame containing the blink data.
+    :return: A generated report as a string.
+    """
+    # Plot the blink data
+    # date = datetime.now().strftime("%Y-%m-%d")
+    date = datetime.now().strftime("2025-08-08")
+    image = plot_blink_data(raw_data, date)
+
+    # Generate the report text
+    report_text = generate_report_text(data)
+
+    # Return the report text and image
+    return {
+        "report": report_text,
+        "daily_line_plot": image
+    }
+
+
 # Example usage
 if __name__ == "__main__":
     # Replace this with your actual tablet data
-    raw_data = """ID, TIMESTAMP_EYE_BLINKED
-    1, 2025-08-07T03:06:30.872100Z
-    2, 2025-08-07T03:07:10.582484Z
-    3, 2025-08-07T03:07:30.872100Z
-    4, 2025-08-07T03:07:51.582484Z
-    1, 2025-08-07T03:07:33.224359Z
-    2, 2025-08-08T03:07:43.872100Z
-    3, 2025-08-08T03:07:45.582484Z
-    4, 2025-08-08T03:07:49.872100Z
-    5, 2025-08-08T03:07:51.582484Z
-    6, 2025-08-08T03:07:52.224359Z
-    1, 2025-08-09T03:07:48.872100Z
-    2, 2025-08-09T03:07:49.582484Z
-    3, 2025-08-09T03:07:50.872100Z
-    4, 2025-08-09T03:07:51.582484Z
-    5, 2025-08-09T03:07:52.224359Z
-    """
-
+    raw_data = load_blink_data('data/blink_data_increase.csv')
     analyzed = analyze_tablet_data(raw_data)
-    report = generate_report(analyzed)
+    report = generate_report(raw_data, analyzed)
     print("Generated Report:")
-    print(report)
+    print(report['report'])
