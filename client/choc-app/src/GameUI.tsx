@@ -1,5 +1,6 @@
 // src/GameUI.tsx
 import React from "react";
+import styled, { keyframes, css } from "styled-components";
 
 interface GameUIProps {
   hearts: number;
@@ -18,6 +19,410 @@ interface GameUIProps {
   isCameraOn: boolean;
 }
 
+// 애니메이션 키프레임
+const comboPulse = keyframes`
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+`;
+
+const dangerPulse = keyframes`
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.2); opacity: 0.8; }
+`;
+
+const feverPulse = keyframes`
+  0%, 100% { box-shadow: 0 4px 20px rgba(255, 107, 53, 0.2); }
+  50% { box-shadow: 0 8px 40px rgba(255, 107, 53, 0.4); }
+`;
+
+const fadeInUp = keyframes`
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+`;
+
+// 스타일 컴포넌트
+const Container = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 1000;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+`;
+
+const StatusBar = styled.div<{ $gamePhase: string }>`
+  position: absolute;
+  top: clamp(16px, 3vw, 24px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: clamp(300px, 85vw, 600px);
+  padding: clamp(12px, 2.5vw, 16px) clamp(16px, 4vw, 24px);
+  border-radius: clamp(16px, 4vw, 24px);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  pointer-events: auto;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  animation: ${fadeInUp} 0.6s ease-out;
+
+  ${({ $gamePhase }) =>
+    $gamePhase === "idle" &&
+    css`
+      background: rgba(16, 185, 129, 0.1);
+      border-color: rgba(16, 185, 129, 0.3);
+    `}
+
+  ${({ $gamePhase }) =>
+    $gamePhase === "warning" &&
+    css`
+      background: rgba(245, 158, 11, 0.15);
+      border-color: rgba(245, 158, 11, 0.4);
+    `}
+
+  ${({ $gamePhase }) =>
+    $gamePhase === "danger" &&
+    css`
+      background: rgba(239, 68, 68, 0.15);
+      border-color: rgba(239, 68, 68, 0.4);
+    `}
+
+  ${({ $gamePhase }) =>
+    $gamePhase === "fever" &&
+    css`
+      background: rgba(249, 115, 22, 0.15);
+      border-color: rgba(249, 115, 22, 0.4);
+      animation: ${feverPulse} 2s infinite, ${fadeInUp} 0.6s ease-out;
+    `}
+`;
+
+const Section = styled.div<{ $align?: string }>`
+  display: flex;
+  align-items: center;
+  gap: clamp(12px, 3vw, 16px);
+  flex: 1;
+
+  ${({ $align }) =>
+    $align === "center" &&
+    css`
+      justify-content: center;
+      flex: 0 0 auto;
+    `}
+
+  ${({ $align }) =>
+    $align === "right" &&
+    css`
+      justify-content: flex-end;
+    `}
+`;
+
+const LifeContainer = styled.div`
+  display: flex;
+  gap: clamp(4px, 1vw, 6px);
+`;
+
+const Heart = styled.span<{ $active: boolean }>`
+  font-size: clamp(16px, 4vw, 20px);
+  transition: all 0.3s ease;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+
+  opacity: ${({ $active }) => ($active ? 1 : 0.3)};
+  transform: ${({ $active }) => ($active ? "scale(1)" : "scale(0.9)")};
+`;
+
+const ComboContainer = styled.div`
+  text-align: center;
+`;
+
+const ComboNumber = styled.div<{ $gamePhase: string }>`
+  font-size: clamp(18px, 4.5vw, 22px);
+  font-weight: 700;
+  color: #f97316;
+  line-height: 1;
+  text-shadow: 0 2px 8px rgba(249, 115, 22, 0.3);
+
+  ${({ $gamePhase }) =>
+    $gamePhase === "warning" &&
+    css`
+      animation: ${comboPulse} 0.5s infinite;
+    `}
+`;
+
+const ComboLabel = styled.div`
+  font-size: clamp(9px, 2vw, 10px);
+  color: rgba(107, 114, 128, 0.8);
+  margin-top: 2px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+`;
+
+const StatusDot = styled.div<{ $gamePhase: string }>`
+  width: clamp(10px, 2.5vw, 14px);
+  height: clamp(10px, 2.5vw, 14px);
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+
+  ${({ $gamePhase }) =>
+    $gamePhase === "idle" &&
+    css`
+      background: linear-gradient(135deg, #10b981, #059669);
+    `}
+
+  ${({ $gamePhase }) =>
+    $gamePhase === "warning" &&
+    css`
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+    `}
+
+  ${({ $gamePhase }) =>
+    $gamePhase === "danger" &&
+    css`
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      animation: ${dangerPulse} 1s infinite;
+    `}
+
+  ${({ $gamePhase }) =>
+    $gamePhase === "fever" &&
+    css`
+      background: linear-gradient(135deg, #f97316, #ea580c);
+    `}
+`;
+
+const FeverBadge = styled.div`
+  background: linear-gradient(135deg, #f97316, #ea580c);
+  color: white;
+  padding: clamp(6px, 1.5vw, 8px) clamp(10px, 2.5vw, 14px);
+  border-radius: clamp(12px, 3vw, 16px);
+  font-size: clamp(10px, 2.2vw, 12px);
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.4);
+  animation: ${fadeInUp} 0.3s ease-out;
+`;
+
+const ScoreContainer = styled.div`
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+`;
+
+const Score = styled.span`
+  font-size: clamp(16px, 4vw, 20px);
+  font-weight: 700;
+  color: #1f2937;
+  line-height: 1;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+`;
+
+const ScoreLabel = styled.span`
+  font-size: clamp(9px, 2vw, 10px);
+  color: rgba(107, 114, 128, 0.7);
+  font-weight: 500;
+  margin-top: 2px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+`;
+
+const ButtonContainer = styled.div`
+  display: flex;
+  gap: clamp(6px, 1.5vw, 8px);
+`;
+
+const Button = styled.button<{ $variant?: string; $active?: boolean }>`
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: clamp(8px, 2vw, 10px);
+  padding: clamp(6px, 1.5vw, 8px);
+  font-size: clamp(12px, 3vw, 14px);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(10px);
+  color: rgba(255, 255, 255, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: clamp(32px, 8vw, 40px);
+  min-height: clamp(32px, 8vw, 40px);
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.25);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+
+  &:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  ${({ $variant, $active }) =>
+    $variant === "camera" &&
+    css`
+      background: ${$active
+        ? "linear-gradient(135deg, #ef4444, #dc2626)"
+        : "linear-gradient(135deg, #10b981, #059669)"};
+      border-color: ${$active
+        ? "rgba(239, 68, 68, 0.6)"
+        : "rgba(16, 185, 129, 0.6)"};
+      color: white;
+
+      &:hover {
+        background: ${$active
+          ? "linear-gradient(135deg, #dc2626, #b91c1c)"
+          : "linear-gradient(135deg, #059669, #047857)"};
+      }
+    `}
+`;
+
+const TimerSection = styled.div`
+  position: absolute;
+  top: clamp(80px, 15vw, 100px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: clamp(300px, 85vw, 600px);
+  pointer-events: none;
+`;
+
+const TimerBar = styled.div`
+  width: 100%;
+  height: clamp(4px, 1vw, 6px);
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: clamp(2px, 0.5vw, 3px);
+  overflow: hidden;
+  margin-bottom: clamp(8px, 2vw, 12px);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+`;
+
+const TimerProgress = styled.div<{ $width: number; $gamePhase: string }>`
+  height: 100%;
+  width: ${({ $width }) => $width}%;
+  transition: width 0.1s ease;
+  border-radius: clamp(2px, 0.5vw, 3px);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+
+  ${({ $gamePhase }) =>
+    $gamePhase === "idle" &&
+    css`
+      background: linear-gradient(90deg, #10b981, #059669);
+    `}
+
+  ${({ $gamePhase }) =>
+    $gamePhase === "warning" &&
+    css`
+      background: linear-gradient(90deg, #f59e0b, #d97706);
+    `}
+
+  ${({ $gamePhase }) =>
+    $gamePhase === "danger" &&
+    css`
+      background: linear-gradient(90deg, #ef4444, #dc2626);
+    `}
+
+  ${({ $gamePhase }) =>
+    $gamePhase === "fever" &&
+    css`
+      background: linear-gradient(90deg, #f97316, #ea580c);
+    `}
+`;
+
+const Countdown = styled.div`
+  text-align: center;
+  pointer-events: none;
+`;
+
+const CountdownText = styled.span`
+  font-size: clamp(24px, 6vw, 32px);
+  font-weight: 700;
+  color: #ef4444;
+  text-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+  display: block;
+  animation: ${comboPulse} 1s infinite;
+`;
+
+const CountdownMessage = styled.div`
+  font-size: clamp(11px, 2.5vw, 13px);
+  color: #ef4444;
+  font-weight: 500;
+  margin-top: 4px;
+  opacity: 0.8;
+`;
+
+const GameOverlay = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  pointer-events: auto;
+  backdrop-filter: blur(8px);
+`;
+
+const GameOverContent = styled.div`
+  background: white;
+  padding: clamp(24px, 6vw, 40px);
+  border-radius: clamp(16px, 4vw, 24px);
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: ${fadeInUp} 0.4s ease-out;
+  max-width: 400px;
+  width: 90vw;
+`;
+
+const GameOverTitle = styled.h2`
+  margin: 0 0 16px;
+  color: #ef4444;
+  font-size: clamp(20px, 5vw, 28px);
+  font-weight: 700;
+`;
+
+const GameOverScore = styled.p`
+  margin: 0 0 24px;
+  font-size: clamp(14px, 3.5vw, 18px);
+  color: #6b7280;
+  font-weight: 500;
+`;
+
+const RestartButton = styled.button`
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  border: none;
+  padding: clamp(10px, 2.5vw, 14px) clamp(20px, 5vw, 28px);
+  border-radius: clamp(8px, 2vw, 12px);
+  font-size: clamp(14px, 3.5vw, 16px);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+
+  &:hover {
+    background: linear-gradient(135deg, #059669, #047857);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+`;
+
 export const GameUI: React.FC<GameUIProps> = ({
   hearts,
   combo,
@@ -34,472 +439,96 @@ export const GameUI: React.FC<GameUIProps> = ({
   onToggleCamera,
   isCameraOn,
 }) => {
-  // 게임 페이즈에 따른 투명도와 스타일
-  const getPhaseStyles = () => {
-    switch (gamePhase) {
-      case "idle":
-        return {
-          opacity: 0.9,
-          backgroundColor: "rgba(33, 192, 116, 0.15)",
-          borderColor: "rgba(33, 192, 116, 0.4)",
-        };
-      case "warning":
-        return {
-          opacity: 0.95,
-          backgroundColor: "rgba(247, 183, 49, 0.2)",
-          borderColor: "rgba(247, 183, 49, 0.5)",
-        };
-      case "danger":
-        return {
-          opacity: 1.0,
-          backgroundColor: "rgba(255, 80, 80, 0.25)",
-          borderColor: "rgba(255, 80, 80, 0.7)",
-        };
-      case "fever":
-        return {
-          opacity: 0.95,
-          backgroundColor: "rgba(255, 107, 53, 0.25)",
-          borderColor: "rgba(255, 107, 53, 0.8)",
-        };
-      default:
-        return {
-          opacity: 0.9,
-          backgroundColor: "rgba(33, 192, 116, 0.15)",
-          borderColor: "rgba(33, 192, 116, 0.4)",
-        };
-    }
-  };
-
-  const phaseStyles = getPhaseStyles();
   const timePercent = (timeRemaining / 6000) * 100;
 
   return (
-    <div style={styles.container}>
-      {/* 상단 상태바 HUD */}
-      <div
-        style={{
-          ...styles.statusBar,
-          ...phaseStyles,
-          animation: gamePhase === "fever" ? "feverPulse 2s infinite" : "none",
-        }}
-      >
+    <Container>
+      {/* 상단 상태바 */}
+      <StatusBar $gamePhase={gamePhase}>
         {/* 왼쪽: 라이프와 콤보 */}
-        <div style={styles.leftSection}>
-          {/* 라이프 */}
-          <div style={styles.lifeContainer}>
+        <Section>
+          <LifeContainer>
             {[1, 2, 3].map((i) => (
-              <span
-                key={i}
-                style={{
-                  ...styles.heart,
-                  opacity: i <= hearts ? 1 : 0.3,
-                  color: i <= hearts ? "#ff5050" : "#ccc",
-                }}
-              >
+              <Heart key={i} $active={i <= hearts}>
                 💧
-              </span>
+              </Heart>
             ))}
-          </div>
+          </LifeContainer>
 
-          {/* 콤보 */}
           {combo > 0 && (
-            <div style={styles.comboContainer}>
-              <div
-                style={{
-                  ...styles.combo,
-                  animation:
-                    gamePhase === "warning"
-                      ? "comboPulse 0.5s infinite"
-                      : "none",
-                }}
-              >
-                {combo}
-              </div>
-              <div style={styles.comboLabel}>콤보</div>
-            </div>
+            <ComboContainer>
+              <ComboNumber $gamePhase={gamePhase}>{combo}</ComboNumber>
+              <ComboLabel>콤보</ComboLabel>
+            </ComboContainer>
           )}
-        </div>
+        </Section>
 
         {/* 중앙: 상태 점과 피버 배지 */}
-        <div style={styles.centerSection}>
-          {/* 상태 점 */}
-          <div style={styles.statusDot}>
-            <div
-              style={{
-                ...styles.dot,
-                backgroundColor:
-                  gamePhase === "idle"
-                    ? "#21c074"
-                    : gamePhase === "warning"
-                    ? "#f7b731"
-                    : gamePhase === "danger"
-                    ? "#ff5050"
-                    : "#ff6b35",
-                animation:
-                  gamePhase === "danger" ? "dangerPulse 1s infinite" : "none",
-              }}
-            />
-          </div>
-
-          {/* 피버 배지 */}
+        <Section $align="center">
+          <StatusDot $gamePhase={gamePhase} />
           {gamePhase === "fever" && (
-            <div style={styles.feverBadge}>
-              <span style={styles.feverText}>🔥 FEVER x5</span>
-            </div>
+            <FeverBadge>🔥 FEVER x5</FeverBadge>
           )}
-        </div>
+        </Section>
 
         {/* 오른쪽: 점수와 버튼들 */}
-        <div style={styles.rightSection}>
-          {/* 점수 */}
-          <div style={styles.scoreContainer}>
-            <span style={styles.score}>{score.toLocaleString()}</span>
-          </div>
+        <Section $align="right">
+          <ScoreContainer>
+            <Score>{score.toLocaleString()}</Score>
+            <ScoreLabel>점수</ScoreLabel>
+          </ScoreContainer>
 
-          {/* 버튼들 */}
-          <div style={styles.buttonContainer}>
-            {/* 카메라 토글 버튼 */}
-            <button
+          <ButtonContainer>
+            <Button
+              $variant="camera"
+              $active={isCameraOn}
               onClick={onToggleCamera}
-              style={{
-                ...styles.cameraButton,
-                backgroundColor: isCameraOn
-                  ? "rgba(255, 80, 80, 0.3)"
-                  : "rgba(33, 192, 116, 0.3)",
-                borderColor: isCameraOn
-                  ? "rgba(255, 80, 80, 0.6)"
-                  : "rgba(33, 192, 116, 0.6)",
-              }}
               title={isCameraOn ? "카메라 끄기" : "카메라 켜기"}
             >
-              {isCameraOn ? "📷" : "📷"}
-            </button>
+              📷
+            </Button>
 
-            {/* 일시정지 버튼 */}
-            <button
+            <Button
               onClick={onTogglePause}
-              style={styles.pauseButton}
               title={isPaused ? "게임 재개" : "게임 일시정지"}
             >
               {isPaused ? "▶️" : "⏸️"}
-            </button>
+            </Button>
 
-            {/* ControlPanel 토글 버튼 */}
-            <button
+            <Button
               onClick={onToggleControlPanel}
-              style={styles.controlPanelButton}
               title={showControlPanel ? "설정 패널 숨기기" : "설정 패널 보기"}
             >
-              {showControlPanel ? "⚙️" : "⚙️"}
-            </button>
-          </div>
-        </div>
-      </div>
+              ⚙️
+            </Button>
+          </ButtonContainer>
+        </Section>
+      </StatusBar>
 
-      {/* 타이머 게이지 - 상태바 아래에 별도로 표시 */}
-      <div style={styles.timerSection}>
-        <div style={styles.timerBar}>
-          <div
-            style={{
-              ...styles.timerProgress,
-              width: `${timePercent}%`,
-              backgroundColor:
-                gamePhase === "idle"
-                  ? "#21c074"
-                  : gamePhase === "warning"
-                  ? "#f7b731"
-                  : gamePhase === "danger"
-                  ? "#ff5050"
-                  : "#ff6b35",
-            }}
-          />
-        </div>
+      {/* 타이머 게이지 */}
+      <TimerSection>
+        <TimerBar>
+          <TimerProgress $width={timePercent} $gamePhase={gamePhase} />
+        </TimerBar>
 
-        {/* 카운트다운 */}
         {countdown !== null && (
-          <div style={styles.countdown}>
-            <span style={styles.countdownText}>{countdown}</span>
-            <div style={styles.countdownMessage}>지금 눈을 감아주세요!</div>
-          </div>
+          <Countdown>
+            <CountdownText>{countdown}</CountdownText>
+            <CountdownMessage>지금 눈을 감아주세요!</CountdownMessage>
+          </Countdown>
         )}
-      </div>
+      </TimerSection>
 
       {/* 게임 오버 화면 */}
       {!isAlive && (
-        <div style={styles.gameOver}>
-          <div style={styles.gameOverContent}>
-            <h2 style={styles.gameOverTitle}>게임 오버</h2>
-            <p style={styles.gameOverScore}>
-              최종 점수: {score.toLocaleString()}
-            </p>
-            <button onClick={onResetGame} style={styles.restartButton}>
-              다시 시작
-            </button>
-          </div>
-        </div>
+        <GameOverlay>
+          <GameOverContent>
+            <GameOverTitle>게임 오버</GameOverTitle>
+            <GameOverScore>최종 점수: {score.toLocaleString()}</GameOverScore>
+            <RestartButton onClick={onResetGame}>다시 시작</RestartButton>
+          </GameOverContent>
+        </GameOverlay>
       )}
-
-      {/* CSS 애니메이션 */}
-      <style>
-        {`
-          @keyframes comboPulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-          }
-
-          @keyframes dangerPulse {
-            0%, 100% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.2); opacity: 0.8; }
-          }
-
-          @keyframes feverPulse {
-            0%, 100% { box-shadow: 0 0 20px rgba(255, 107, 53, 0.3); }
-            50% { box-shadow: 0 0 30px rgba(255, 107, 53, 0.6); }
-          }
-        `}
-      </style>
-    </div>
+    </Container>
   );
-};
-
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    pointerEvents: "none",
-    zIndex: 1000,
-  },
-
-  // 상태바 스타일
-  statusBar: {
-    position: "absolute",
-    top: "20px",
-    left: "50%",
-    transform: "translateX(-50%)",
-    width: "90vw",
-    maxWidth: "800px",
-    padding: "12px 20px",
-    borderRadius: "20px",
-    border: "2px solid",
-    backdropFilter: "blur(15px)",
-    pointerEvents: "auto",
-    transition: "all 0.3s ease",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    boxShadow: "0 8px 32px rgba(0,0,0,0.1)",
-  },
-
-  leftSection: {
-    display: "flex",
-    alignItems: "center",
-    gap: "16px",
-  },
-
-  centerSection: {
-    display: "flex",
-    alignItems: "center",
-    gap: "12px",
-  },
-
-  rightSection: {
-    display: "flex",
-    alignItems: "center",
-    gap: "16px",
-  },
-
-  lifeContainer: {
-    display: "flex",
-    gap: "4px",
-  },
-
-  heart: {
-    fontSize: "18px",
-    filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.2))",
-  },
-
-  comboContainer: {
-    textAlign: "center",
-  },
-
-  combo: {
-    fontSize: "20px",
-    fontWeight: "bold",
-    color: "#ff6b35",
-    textShadow: "0 2px 4px rgba(0,0,0,0.3)",
-  },
-
-  comboLabel: {
-    fontSize: "10px",
-    color: "#666",
-    marginTop: "2px",
-  },
-
-  statusDot: {
-    display: "flex",
-    alignItems: "center",
-  },
-
-  dot: {
-    width: "10px",
-    height: "10px",
-    borderRadius: "50%",
-    boxShadow: "0 2px 4px rgba(0,0,0,0.3)",
-  },
-
-  feverBadge: {
-    backgroundColor: "rgba(255, 107, 53, 0.9)",
-    color: "white",
-    padding: "4px 8px",
-    borderRadius: "12px",
-    fontSize: "10px",
-    fontWeight: "bold",
-  },
-
-  feverText: {
-    textShadow: "0 1px 2px rgba(0,0,0,0.3)",
-  },
-
-  scoreContainer: {
-    textAlign: "right",
-  },
-
-  score: {
-    fontSize: "16px",
-    fontWeight: "bold",
-    color: "#333",
-    textShadow: "0 1px 2px rgba(255,255,255,0.5)",
-  },
-
-  buttonContainer: {
-    display: "flex",
-    gap: "8px",
-  },
-
-  cameraButton: {
-    background: "rgba(255,255,255,0.2)",
-    border: "1px solid",
-    borderRadius: "8px",
-    padding: "8px",
-    fontSize: "14px",
-    cursor: "pointer",
-    transition: "all 0.2s ease",
-    backdropFilter: "blur(5px)",
-  },
-
-  pauseButton: {
-    background: "rgba(255,255,255,0.2)",
-    border: "1px solid rgba(255,255,255,0.3)",
-    borderRadius: "8px",
-    padding: "8px",
-    fontSize: "14px",
-    cursor: "pointer",
-    transition: "all 0.2s ease",
-    backdropFilter: "blur(5px)",
-  },
-
-  controlPanelButton: {
-    background: "rgba(255,255,255,0.2)",
-    border: "1px solid rgba(255,255,255,0.3)",
-    borderRadius: "8px",
-    padding: "8px",
-    fontSize: "14px",
-    cursor: "pointer",
-    transition: "all 0.2s ease",
-    backdropFilter: "blur(5px)",
-  },
-
-  // 타이머 섹션
-  timerSection: {
-    position: "absolute",
-    top: "100px",
-    left: "50%",
-    transform: "translateX(-50%)",
-    width: "90vw",
-    maxWidth: "800px",
-    pointerEvents: "none",
-  },
-
-  timerBar: {
-    width: "100%",
-    height: "6px",
-    backgroundColor: "rgba(0,0,0,0.1)",
-    borderRadius: "3px",
-    overflow: "hidden",
-    marginBottom: "8px",
-  },
-
-  timerProgress: {
-    height: "100%",
-    transition: "width 0.1s ease",
-    borderRadius: "3px",
-  },
-
-  countdown: {
-    textAlign: "center",
-    pointerEvents: "none",
-  },
-
-  countdownText: {
-    fontSize: "28px",
-    fontWeight: "bold",
-    color: "#ff5050",
-    textShadow: "0 2px 4px rgba(0,0,0,0.3)",
-    display: "block",
-  },
-
-  countdownMessage: {
-    fontSize: "12px",
-    color: "#ff5050",
-    fontWeight: "bold",
-    marginTop: "4px",
-  },
-
-  gameOver: {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.8)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 2000,
-    pointerEvents: "auto",
-  },
-
-  gameOverContent: {
-    backgroundColor: "white",
-    padding: "32px",
-    borderRadius: "16px",
-    textAlign: "center",
-    boxShadow: "0 8px 32px rgba(0,0,0,0.3)",
-  },
-
-  gameOverTitle: {
-    margin: "0 0 16px",
-    color: "#ff5050",
-    fontSize: "24px",
-  },
-
-  gameOverScore: {
-    margin: "0 0 24px",
-    fontSize: "18px",
-    color: "#666",
-  },
-
-  restartButton: {
-    backgroundColor: "#21c074",
-    color: "white",
-    border: "none",
-    padding: "12px 24px",
-    borderRadius: "8px",
-    fontSize: "16px",
-    cursor: "pointer",
-    transition: "background-color 0.2s ease",
-  },
 };
