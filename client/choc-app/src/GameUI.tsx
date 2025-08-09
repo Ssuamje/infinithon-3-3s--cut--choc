@@ -96,7 +96,7 @@ export const GameUI: React.FC<GameUIProps> = ({
                   color: i <= hearts ? "#ff5050" : "#ccc",
                 }}
               >
-                ❤️
+                💧
               </span>
             ))}
           </div>
