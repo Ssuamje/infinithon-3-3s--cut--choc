@@ -66,9 +66,10 @@ async def send_processed_data(request_id: str):
         return {"message": "No data found for the given request ID"}
 
     # 필요하면 여기서 실제 분석 호출
-    # if analyze_tablet_data and generate_report:
-    #     processed = analyze_tablet_data(saved["payload"])
-    #     report = generate_report(processed)
-    #     return {"report": report}
-
-    return {"report": saved["payload"]}
+    if analyze_tablet_data and generate_report:
+        preprocessed_data = pd.DataFrame({"TIMESTAMP": saved['payload']['events']})
+        analyzed = analyze_tablet_data(preprocessed_data)
+        report = generate_report(preprocessed_data, analyzed)
+        return report # {"report": report['report_text'], "image": report['image']}
+    else:
+        return {"message": "Analysis functions are not available."}
