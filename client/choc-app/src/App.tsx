@@ -7,7 +7,7 @@ import { useGameLogic } from "./useGameLogic";
 import { GameUI } from "./GameUI";
 import { VideoDisplay } from "./components/VideoDisplay";
 import { ControlPanel } from "./components/ControlPanel";
-import { useMicVAD } from "./hooks/useMicVAD";
+// import { useMicVAD } from "./hooks/useMicVAD";
 
 export default function App() {
   // 카메라 관련 로직
@@ -35,7 +35,7 @@ export default function App() {
     useGameLogic(blink.blinks, blink.lastBlinkAt);
 
   // 🎤 VAD 상태 (표시용)
-  const vad = useMicVAD(true);
+  // const vad = useMicVAD(true);
 
   const isBlinking = blink.state === "CLOSED" || blink.state === "CLOSING";
 
