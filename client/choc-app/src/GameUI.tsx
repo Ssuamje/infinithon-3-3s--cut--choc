@@ -320,7 +320,7 @@ const Container = styled.div`
 // StatusBar를 원래대로 되돌리고 피버 모드만 특별한 테두리 효과 추가
 const StatusBar = styled.div<{ $gamePhase: string }>`
   position: relative;
-  width: clamp(300px, 80vw, 600px);
+  width: clamp(300px, 80vw, 640px);
   margin: 0 auto;
   padding: clamp(12px, 2.5vw, 16px) clamp(16px, 4vw, 24px);
   border-radius: clamp(16px, 4vw, 24px);
