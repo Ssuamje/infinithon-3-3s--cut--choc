@@ -49,12 +49,12 @@ def generate_blink_data(persona_index, blink_rate: float, day=TODAY, start_hour=
     data = []
     start_timestamp = f"{day}T{start_hour:02d}:00:00"
     start_timestamp = datetime.strptime(start_timestamp, "%Y-%m-%dT%H:%M:%S")
+    timestamp = start_timestamp
     for blink_id in range(total_blinks):
-        blink_interval = 60 / blink_rate + np.random.uniform(-0.5, 0.5) # Randomize the blink interval slightly
-        timestamp = start_timestamp + pd.Timedelta(seconds=blink_id * blink_interval)
-        data.append(f"{timestamp.isoformat()}")
-        if timestamp.hour >= end_hour:
-            break  # Stop if we reach the end hour
+        if timestamp < start_timestamp.replace(hour=end_hour, minute=0, second=0, microsecond=0):
+            blink_interval = 60 / blink_rate + np.random.uniform(-0.5, 0.5) # Randomize the blink interval slightly
+            timestamp = start_timestamp + pd.Timedelta(seconds=blink_id * blink_interval)
+            data.append(f"{timestamp.isoformat()}")
     return data
 
 def generate_blink_data_for_all_personas():
@@ -73,7 +73,7 @@ def generate_blink_data_for_all_personas():
                     continue
                 cur_date -= pd.Timedelta(days=1)
                 data = generate_blink_data(index, blink_rate, cur_date.strftime("%Y-%m-%d"), start_hour=9, end_hour=17)
-                all_persona_data[name] = all_persona_data.get(name, []) + data
+                all_persona_data[name] = data + all_persona_data.get(name, [])
     return all_persona_data
 
 if __name__ == "__main__":
@@ -86,9 +86,17 @@ if __name__ == "__main__":
 
     blink_data = generate_blink_data_for_all_personas()
 
-    for persona, data in blink_data.items():
+    for i, (persona, data) in enumerate(blink_data.items()):
         with open(f"blink_data_{persona}.csv", "w") as f:
             f.write("ID,TIMESTAMP\n")
             for idx, line in enumerate(data):
                 timestamp = line.strip()
                 f.write(f"{idx},{timestamp}\n")
+
+            # write for today
+            today_data = generate_blink_data(i, 10.0, TODAY, 8, 11)
+            for idx, line in enumerate(today_data):
+                timestamp = line.strip()
+                f.write(f"{idx + len(data)},{timestamp}\n")
+    
+    print("Blink data generated for all personas.")
