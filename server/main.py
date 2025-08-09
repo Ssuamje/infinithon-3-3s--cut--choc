@@ -9,15 +9,11 @@ from pydantic import BaseModel
 
 # (패키지/모듈 실행 모두 대응)
 try:
-    from .genai import analyze_tablet_data, generate_report 
+    from genai import analyze_tablet_data, generate_report
 except Exception:
-    print("Error importing relative genai module. Trying absolute import.")
-    try:
-        from genai import analyze_tablet_data, generate_report
-    except Exception:
-        print("Error importing genai functions. Ensure genai directory is in the same directory or properly installed.")
-        analyze_tablet_data = None
-        generate_report = None
+    print("Error importing genai functions. Ensure genai directory is in the same directory or properly installed.")
+    analyze_tablet_data = None
+    generate_report = None
 
 class BlinkSession(BaseModel):
     id: str
