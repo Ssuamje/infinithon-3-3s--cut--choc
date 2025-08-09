@@ -15,5 +15,7 @@ fun Application.configureApplicationDependencies() {
 
 val applicationModule = module {
     single { UserService(get()) }
+    single { BlinkService(get()) }
     singleOf(::UserController)
+    singleOf(::BlinkController)
 }

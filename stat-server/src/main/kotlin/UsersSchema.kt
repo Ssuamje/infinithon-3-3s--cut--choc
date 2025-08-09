@@ -27,9 +27,15 @@ class UserService(database: Database) {
 
     init {
         transaction(database) {
-            SchemaUtils.drop(Users)
             SchemaUtils.create(Users)
         }
+    }
+
+    suspend fun getUserByNickname(nickname: String): User? = dbQuery {
+        Users.selectAll()
+            .where { Users.nickname eq nickname }
+            .map { User(it[Users.nickname], it[Users.createdAt]) }
+            .singleOrNull()
     }
 
     suspend fun create(userRequest: UserRequest): User = dbQuery {

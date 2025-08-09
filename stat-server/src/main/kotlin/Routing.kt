@@ -16,6 +16,7 @@ fun Application.configureRouting() {
     }
     
     val userController by inject<UserController>()
+    val blinkController by inject<BlinkController>()
     
     routing {
         get("/") {
@@ -28,6 +29,22 @@ fun Application.configureRouting() {
 
         get("/users") {
             userController.getAllUsers(call)
+        }
+
+        post("/blink/test/{nickname}") {
+            blinkController.saveTestBlink(call)
+        }
+
+        post("/blink/events") {
+            blinkController.saveBlinkEvents(call)
+        }
+
+        get("/blink/events/{nickname}") {
+            blinkController.getBlinkEvents(call)
+        }
+
+        get ("/blink/rankings") {
+            blinkController.getBlinkRankings(call)
         }
     }
 }
