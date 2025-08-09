@@ -33,6 +33,7 @@ interface GameUIProps {
   dangerOpacity: number;
   onToggleContextMenu: () => void;
   showContextMenu: boolean;
+  onSendAndFetch: () => void; // 데이터 전송 & 분석 결과 보기 함수 추가
 }
 
 export const GameUI: React.FC<GameUIProps> = ({
@@ -55,9 +56,10 @@ export const GameUI: React.FC<GameUIProps> = ({
   dangerOpacity,
   onToggleContextMenu,
   showContextMenu,
+  onSendAndFetch, // 데이터 전송 & 분석 결과 보기 함수 추가
 }) => {
   const timePercent = (timeRemaining / 6000) * 100;
-  
+
   // 게임 상태에 따른 투명도 결정
   const getCurrentOpacity = () => {
     switch (gamePhase) {
@@ -92,6 +94,10 @@ export const GameUI: React.FC<GameUIProps> = ({
     <Container style={{ opacity: getCurrentOpacity() }}>
       {/* 상단 상태바 */}
       <StatusBar $gamePhase={gamePhase}>
+        {/* 중앙: 상태 점 (피버 모드가 아닐 때만 배지 표시) */}
+        <Section $align="center">
+          <StatusDot $gamePhase={gamePhase} />
+        </Section>
         {/* 왼쪽: 라이프와 콤보 */}
         <Section>
           <LifeContainer>
@@ -108,11 +114,6 @@ export const GameUI: React.FC<GameUIProps> = ({
               <ComboLabel>콤보</ComboLabel>
             </ComboContainer>
           )}
-        </Section>
-
-        {/* 중앙: 상태 점 (피버 모드가 아닐 때만 배지 표시) */}
-        <Section $align="center">
-          <StatusDot $gamePhase={gamePhase} />
         </Section>
 
         {/* 오른쪽: 점수와 버튼들 */}
@@ -145,19 +146,23 @@ export const GameUI: React.FC<GameUIProps> = ({
             >
               ⚙️
             </Button>
-            
-            <Button
-              onClick={onToggleContextMenu}
-              title="투명도 조절"
-            >
+
+            <Button onClick={onToggleContextMenu} title="투명도 조절">
               🎛️
+            </Button>
+
+            <Button
+              onClick={onSendAndFetch}
+              title="데이터 전송 & 분석 결과 보기"
+            >
+              📊
             </Button>
           </ButtonContainer>
         </Section>
       </StatusBar>
 
       {/* 타이머 게이지 */}
-      <TimerSection>
+      {/* <TimerSection>
         <TimerBar>
           <TimerProgress $width={timePercent} $gamePhase={gamePhase} />
         </TimerBar>
@@ -168,14 +173,14 @@ export const GameUI: React.FC<GameUIProps> = ({
             <CountdownMessage>지금 눈을 감아주세요!</CountdownMessage>
           </Countdown>
         )}
-      </TimerSection>
+      </TimerSection> */}
 
       {/* 투명도 조절 메뉴 */}
       {showContextMenu && (
         <ContextMenuOverlay onClick={onToggleContextMenu}>
           <ContextMenuContent onClick={(e) => e.stopPropagation()}>
             <ContextMenuTitle>투명도 조절</ContextMenuTitle>
-            
+
             {/* 기본 투명도 */}
             <OpacitySliderContainer>
               <OpacityLabel>기본 (초록/피버)</OpacityLabel>
@@ -186,18 +191,18 @@ export const GameUI: React.FC<GameUIProps> = ({
                 step="0.1"
                 value={opacity}
                 onChange={(e) => {
-                  const event = new CustomEvent('opacityChange', {
-                    detail: { 
-                      type: 'normal',
-                      opacity: parseFloat(e.target.value) 
-                    }
+                  const event = new CustomEvent("opacityChange", {
+                    detail: {
+                      type: "normal",
+                      opacity: parseFloat(e.target.value),
+                    },
                   });
                   window.dispatchEvent(event);
                 }}
               />
               <OpacityValue>{Math.round(opacity * 100)}%</OpacityValue>
             </OpacitySliderContainer>
-            
+
             {/* 주황 상태 투명도 */}
             <OpacitySliderContainer>
               <OpacityLabel>주황 상태</OpacityLabel>
@@ -208,18 +213,18 @@ export const GameUI: React.FC<GameUIProps> = ({
                 step="0.1"
                 value={warningOpacity}
                 onChange={(e) => {
-                  const event = new CustomEvent('opacityChange', {
-                    detail: { 
-                      type: 'warning',
-                      opacity: parseFloat(e.target.value) 
-                    }
+                  const event = new CustomEvent("opacityChange", {
+                    detail: {
+                      type: "warning",
+                      opacity: parseFloat(e.target.value),
+                    },
                   });
                   window.dispatchEvent(event);
                 }}
               />
               <OpacityValue>{Math.round(warningOpacity * 100)}%</OpacityValue>
             </OpacitySliderContainer>
-            
+
             {/* 빨강 상태 투명도 */}
             <OpacitySliderContainer>
               <OpacityLabel>빨강 상태</OpacityLabel>
@@ -230,11 +235,11 @@ export const GameUI: React.FC<GameUIProps> = ({
                 step="0.1"
                 value={dangerOpacity}
                 onChange={(e) => {
-                  const event = new CustomEvent('opacityChange', {
-                    detail: { 
-                      type: 'danger',
-                      opacity: parseFloat(e.target.value) 
-                    }
+                  const event = new CustomEvent("opacityChange", {
+                    detail: {
+                      type: "danger",
+                      opacity: parseFloat(e.target.value),
+                    },
                   });
                   window.dispatchEvent(event);
                 }}
@@ -438,6 +443,7 @@ const ComboLabel = styled.div`
 const StatusDot = styled.div<{ $gamePhase: string }>`
   width: clamp(10px, 2.5vw, 14px);
   height: clamp(10px, 2.5vw, 14px);
+  margin-right: 10px;
   border-radius: 50%;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   transition: all 0.3s ease;
@@ -483,6 +489,7 @@ const ScoreContainer = styled.div`
 `;
 
 const Score = styled.span`
+  min-width: 20px;
   font-size: clamp(16px, 4vw, 20px);
   font-weight: 700;
   color: #999;
@@ -746,7 +753,7 @@ const OpacitySlider = styled.input`
   border-radius: 2px;
   outline: none;
   cursor: pointer;
-  
+
   &::-webkit-slider-thumb {
     appearance: none;
     width: 20px;
@@ -756,7 +763,7 @@ const OpacitySlider = styled.input`
     cursor: pointer;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   }
-  
+
   &::-moz-range-thumb {
     width: 20px;
     height: 20px;

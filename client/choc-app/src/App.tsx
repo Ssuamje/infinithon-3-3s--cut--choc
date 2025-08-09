@@ -11,7 +11,8 @@ import { ControlPanel } from "./components/ControlPanel";
 
 export default function App() {
   // 카메라 관련 로직
-  const { videoRef, state, ready, error, startCamera, stopCamera } = useCamera();
+  const { videoRef, state, ready, error, startCamera, stopCamera } =
+    useCamera();
 
   // 화면 표시 설정 관련 로직
   const {
@@ -62,7 +63,8 @@ export default function App() {
       }
     };
     window.addEventListener("opacityChange", handleOpacityChange);
-    return () => window.removeEventListener("opacityChange", handleOpacityChange);
+    return () =>
+      window.removeEventListener("opacityChange", handleOpacityChange);
   }, []);
 
   const isBlinking = blink.state === "CLOSED" || blink.state === "CLOSING";
@@ -92,7 +94,7 @@ export default function App() {
 
   // 서버 URL
   const API_BASE =
-    (import.meta as any).env?.VITE_API_BASE || "http://localhost:8000";
+    (import.meta as any).env?.VITE_API_BASE || "http://10.99.13.19:8000";
 
   // 데이터 서버로 전송
   const sendBlinkData = async () => {
@@ -146,9 +148,9 @@ export default function App() {
       : "-";
     return `평균: ${avg.toFixed(3)} | 임계값: 감음<${blink.CLOSE_T.toFixed(
       2
-    )} / 뜸>${blink.OPEN_T.toFixed(2)} | 최솟값: ${min.toFixed(3)} / 최댓값: ${max.toFixed(
+    )} / 뜸>${blink.OPEN_T.toFixed(2)} | 최솟값: ${min.toFixed(
       3
-    )} | 최근 갱신: ${lastTs}`;
+    )} / 최댓값: ${max.toFixed(3)} | 최근 갱신: ${lastTs}`;
   })();
 
   return (
@@ -203,6 +205,7 @@ export default function App() {
         dangerOpacity={dangerOpacity}
         showContextMenu={showContextMenu}
         onToggleContextMenu={() => setShowContextMenu(!showContextMenu)}
+        onSendAndFetch={sendAndFetch}
       />
 
       {/* 컨트롤 패널 */}
@@ -240,18 +243,12 @@ export default function App() {
       />
 
       {/* HUD */}
-      {showHUD && <p style={styles.hud}>{hudText}</p>}
+      {/* {showHUD && <p style={styles.hud}>{hudText}</p>} */}
 
-      <p style={styles.tip}>
-        ※ 완전한 깜빡임 사이클(뜸→감음→뜸)을 감지합니다. 눈을 감고만 있으면 카운트되지 않아요!
-      </p>
-
-      {/* 임시 버튼: 전송 + 분석결과 조회 */}
-      <div style={{ marginTop: 12, textAlign: "center" }}>
-        <button onClick={sendAndFetch} style={styles.button}>
-          데이터 전송 & 분석 결과 보기
-        </button>
-      </div>
+      {/* <p style={styles.tip}>
+        ※ 완전한 깜빡임 사이클(뜸→감음→뜸)을 감지합니다. 눈을 감고만 있으면
+        카운트되지 않아요!
+      </p> */}
 
       {/* 임시 결과 패널 */}
       {processed && (
@@ -269,7 +266,16 @@ export default function App() {
             fontFamily: "monospace",
           }}
         >
-          <div style={{ marginBottom: 8, fontWeight: 700, textAlign: "center", fontSize: "18px" }}><b>"{String(processed.user_name)}"의 눈 건강 리포트 💾</b></div>
+          <div
+            style={{
+              marginBottom: 8,
+              fontWeight: 700,
+              textAlign: "center",
+              fontSize: "18px",
+            }}
+          >
+            <b>"{String(processed.user_name)}"의 눈 건강 리포트 💾</b>
+          </div>
 
           {"message" in processed && !("report" in processed) && (
             <div style={{ marginBottom: 6 }}>{String(processed.message)}</div>
@@ -277,35 +283,47 @@ export default function App() {
 
           {"daily_blink_per_minute" in processed && (
             <div style={{ marginTop: 6 }}>
-              <b>오늘의 평균 눈 깜박임 횟수 👁️</b> {Number(processed.daily_blink_per_minute || 0).toFixed(2)}회 / 분
+              <b>오늘의 평균 눈 깜박임 횟수 👁️</b>{" "}
+              {Number(processed.daily_blink_per_minute || 0).toFixed(2)}회 / 분
             </div>
           )}
 
           {"report" in processed && (
-            <div style={{ marginTop: 6, textAlign: "center", fontSize: "15px" }}>
+            <div
+              style={{ marginTop: 6, textAlign: "center", fontSize: "15px" }}
+            >
               <b>['촉💦'의 한 마디]</b>
             </div>
           )}
 
           {"report" in processed && (
-            <pre style={{ whiteSpace: "pre-wrap", maxHeight: 220, overflow: "auto" }}>
+            <pre
+              style={{
+                whiteSpace: "pre-wrap",
+                maxHeight: 220,
+                overflow: "auto",
+              }}
+            >
               {processed.report}
             </pre>
           )}
 
           {"daily_line_plot_b64" in processed && (
-            <div style={{ marginTop: 6, textAlign: "center", fontSize: "15px" }}>
+            <div
+              style={{ marginTop: 6, textAlign: "center", fontSize: "15px" }}
+            >
               <b>[오늘의 깜빡✨ 그래프]</b>
             </div>
           )}
 
-          {"daily_line_plot_b64" in processed && processed.daily_line_plot_b64 && (
-            <img
-              alt="plot"
-              style={{ width: "100%", marginTop: 8, borderRadius: 6 }}
-              src={`data:image/png;base64,${processed.daily_line_plot_b64}`}
-            />
-          )}
+          {"daily_line_plot_b64" in processed &&
+            processed.daily_line_plot_b64 && (
+              <img
+                alt="plot"
+                style={{ width: "100%", marginTop: 8, borderRadius: 6 }}
+                src={`data:image/png;base64,${processed.daily_line_plot_b64}`}
+              />
+            )}
         </div>
       )}
     </div>
