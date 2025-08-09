@@ -124,9 +124,6 @@ export const GameUI: React.FC<GameUIProps> = ({
               title={showControlPanel ? "설정 패널 숨기기" : "설정 패널 보기"}
             >
               ⚙️
-            </Button>
-            {/* 📤 데이터 전송 버튼 */}
-            <Button onClick={onSendBlinkData} title="Blink 데이터 전송">
           </Button>
           </ButtonContainer>
         </Section>
