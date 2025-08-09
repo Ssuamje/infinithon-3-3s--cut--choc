@@ -168,7 +168,7 @@ export default function App() {
         </div>
         <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>
           평균: {((blink.ratioL + blink.ratioR) / 2).toFixed(3)} 
-          | 임계값: 감음&lt;0.12 / 뜸&gt;0.15
+          | 임계값: 감음&lt;{blink.CLOSE_T} / 뜸&gt;{blink.OPEN_T}
         </div>
         <div style={{ fontSize: 12, color: '#666' }}>
           완전한 깜빡임 사이클 감지 (뜸→감음→뜸)
@@ -208,7 +208,7 @@ export default function App() {
       </div>
 
       <p style={styles.tip}>
-        ※ 완전한 깜빡임 사이클(뜸→감는중→감음→뜨는중→뜸)을 감지합니다. 
+        ※ 완전한 깜빡임 사이클(뜸→감음→뜸)을 감지합니다.
         눈을 감고만 있으면 카운트되지 않아요!
       </p>
     </div>

@@ -11,6 +11,8 @@ export interface BlinkResult {
   state: BlinkState;
   blinks: number;
   lastBlinkAt: number | null;
+  CLOSE_T: number; // 감음 임계값
+  OPEN_T: number;  // 뜸 임계값
 }
 
 /** 유클리드 거리 */
@@ -48,6 +50,8 @@ export function useBlinkDetector(videoEl: HTMLVideoElement | null) {
     state: "UNKNOWN",
     blinks: 0,
     lastBlinkAt: null,
+    CLOSE_T: 0.30, // 감음 임계값
+    OPEN_T: 0.50,  // 뜸 임계값
   });
 
   const camRef = useRef<Camera | null>(null);
@@ -68,7 +72,7 @@ export function useBlinkDetector(videoEl: HTMLVideoElement | null) {
   const lastDetectedRatioRef = useRef<number>(0);
 
   // 깜빡임 감지를 위한 임계값들 - 더 관대하게 조정
-  const CLOSE_T = 0.20;   // 감음 판단 임계값 (더 낮게)
+  const CLOSE_T = 0.30;   // 감음 판단 임계값 (더 낮게)
   const OPEN_T = 0.50;    // 뜸 판단 임계값 (더 낮게)
   const MIN_STATE_DURATION = 30;    // 상태 변경 최소 지속시간 (ms) - 더 짧게
   const MIN_CONSECUTIVE_FRAMES = 1; // 상태 변경을 위한 최소 연속 프레임 수 - 더 관대하게
@@ -97,7 +101,7 @@ export function useBlinkDetector(videoEl: HTMLVideoElement | null) {
     let cancelled = false;
 
     // 상태 초기화
-    stateRef.current = "UNKNOWN";
+    // stateRef.current = "UNKNOWN";
     stateStartTimeRef.current = Date.now();
     consecutiveFramesRef.current = 0;
     rLRef.current = 0;
@@ -121,7 +125,7 @@ export function useBlinkDetector(videoEl: HTMLVideoElement | null) {
         if (!lm) {
           // 일정 시간 후 상태 리셋
           if (now - stateStartTimeRef.current > NO_FACE_TIMEOUT) {
-            stateRef.current = "UNKNOWN";
+            // stateRef.current = "UNKNOWN";
             rLRef.current = 0;
             rRRef.current = 0;
             consecutiveFramesRef.current = 0;
@@ -133,6 +137,8 @@ export function useBlinkDetector(videoEl: HTMLVideoElement | null) {
             state: stateRef.current,
             blinks: blinksRef.current,
             lastBlinkAt: lastBlinkAtRef.current,
+            CLOSE_T,
+            OPEN_T,
           });
           return;
         }
@@ -210,6 +216,8 @@ export function useBlinkDetector(videoEl: HTMLVideoElement | null) {
           state: newState,
           blinks: blinksRef.current,
           lastBlinkAt: lastBlinkAtRef.current,
+          CLOSE_T,
+          OPEN_T,
         });
       });
 
