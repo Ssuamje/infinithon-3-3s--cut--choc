@@ -17,6 +17,8 @@ interface GameUIProps {
   onToggleControlPanel: () => void;
   onToggleCamera: () => void;
   isCameraOn: boolean;
+  butButton?: React.ReactNode;
+  butMessage?: React.ReactNode;
 }
 
 export const GameUI: React.FC<GameUIProps> = ({
@@ -29,6 +31,8 @@ export const GameUI: React.FC<GameUIProps> = ({
   countdown,
   isPaused,
   showControlPanel,
+  butButton,
+  butMessage,
   onResetGame,
   onTogglePause,
   onToggleControlPanel,
@@ -89,6 +93,9 @@ export const GameUI: React.FC<GameUIProps> = ({
               {isPaused ? "▶️" : "⏸️"}
             </Button>
 
+            {/* BUT 측정 버튼을 중지 버튼 옆에 추가 */}
+            {butButton}
+
             <Button
               onClick={onToggleControlPanel}
               title={showControlPanel ? "설정 패널 숨기기" : "설정 패널 보기"}
@@ -96,6 +103,11 @@ export const GameUI: React.FC<GameUIProps> = ({
               ⚙️
             </Button>
           </ButtonContainer>
+
+          {/* BUT 메시지는 버튼 아래에 표시 */}
+          {butMessage && (
+            <div style={{ marginTop: 4, minHeight: 20 }}>{butMessage}</div>
+          )}
         </Section>
       </StatusBar>
 
