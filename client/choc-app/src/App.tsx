@@ -129,14 +129,14 @@ export default function App() {
   return (
     <div style={styles.wrap}>
       {/* === VAD 상태 (임시 표시) === */}
-      <div style={{ fontSize: 12, marginBottom: 8 }}>
+      {/* <div style={{ fontSize: 12, marginBottom: 8 }}>
         VAD: {vad.connected ? "● CONNECTED" : "○ DISCONNECTED"}
         {" | "}inSpeech: {vad.inSpeech ? "YES" : "no"}
         {" | "}p={vad.lastProb.toFixed(3)}
         {vad.error && (
           <span style={{ color: "red" }}>{" | "}{vad.error}</span>
         )}
-      </div>
+      </div> */}
 
       {/* 게임 UI */}
       <GameUI
