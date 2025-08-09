@@ -29,8 +29,8 @@ export default function App() {
   const [showControlPanel, setShowControlPanel] = useState(false);
 
   // 투명도 관련 상태 (새 기능 유지)
-  const [opacity, setOpacity] = useState(0.5);
-  const [warningOpacity, setWarningOpacity] = useState(0.75);
+  const [opacity, setOpacity] = useState(0.7);
+  const [warningOpacity, setWarningOpacity] = useState(0.85);
   const [dangerOpacity, setDangerOpacity] = useState(1);
   const [showContextMenu, setShowContextMenu] = useState(false);
 

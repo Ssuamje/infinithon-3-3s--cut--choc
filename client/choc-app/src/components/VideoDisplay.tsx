@@ -23,33 +23,54 @@ export function VideoDisplay({
 }: VideoDisplayProps) {
   // 카메라가 켜져있을 때만 비디오 표시
   useEffect(() => {
-    if (videoRef.current && showFace) {
-      // 비디오 요소가 보이도록 설정
-      videoRef.current.style.display = "block";
-    } else if (videoRef.current) {
-      // 비디오 요소를 숨김 (깜빡임 감지는 계속 유지)
-      videoRef.current.style.display = "none";
+    if (videoRef.current) {
+      if (showFace) {
+        // 비디오 요소가 보이도록 설정
+        videoRef.current.style.visibility = "visible";
+        videoRef.current.style.opacity = "1";
+      } else {
+        // 비디오 요소를 숨김 (깜빡임 감지는 계속 유지)
+        videoRef.current.style.visibility = "hidden";
+        videoRef.current.style.opacity = "0";
+      }
     }
   }, [showFace, videoRef]);
 
   // 둘 다 꺼져있을 때 VideoDisplay 자체를 숨김
   if (!showFace && !showCharacter) {
     return (
-      <div style={styles.videoBox}>
+      <div
+        style={{
+          ...styles.videoBox,
+          width: "auto",
+          minWidth: "auto",
+          aspectRatio: "auto",
+          height: "auto",
+          background: "transparent",
+          margin: "0",
+          padding: "0",
+        }}
+      >
         {/* 깜빡임 감지를 위한 숨겨진 비디오 요소 */}
         <video
           ref={videoRef}
           style={{
             ...styles.video,
             transform: mirrored ? "scaleX(-1)" : "none",
-            display: "none", // 완전히 숨김
+            visibility: "hidden", // visibility로 숨김
+            opacity: 0, // opacity로 투명하게
+            position: "absolute", // 절대 위치로 레이아웃에 영향 없게
+            width: "1px",
+            height: "1px",
+            top: "-9999px",
+            left: "-9999px",
           }}
           playsInline
           muted
           autoPlay
         />
 
-        <div style={styles.emptyScreen}>
+        {/* <div style={styles.emptyScreen}>
           <div style={styles.emptyText}>
             카메라 화면이 숨겨져있습니다
             <br />
@@ -60,9 +81,9 @@ export function VideoDisplay({
               {ready && !error ? "👁️ 눈깜빡임 감지 중..." : ""}
             </span>
           </div>
-        </div>
+        </div> */}
 
-        {!ready && !error && <div style={styles.overlay}>카메라 준비 중…</div>}
+        {/* {!ready && !error && <div style={styles.overlay}>카메라 준비 중…</div>} */}
         {/* {error && <div style={styles.overlay}>에러: {error}</div>} */}
       </div>
     );
@@ -76,7 +97,9 @@ export function VideoDisplay({
         style={{
           ...styles.video,
           transform: mirrored ? "scaleX(-1)" : "none",
-          display: showFace ? "block" : "none",
+          visibility: showFace ? "visible" : "hidden",
+          opacity: showFace ? 1 : 0,
+          transition: "opacity 0.3s ease-in-out", // 부드러운 페이드 효과
         }}
         playsInline
         muted

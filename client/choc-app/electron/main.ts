@@ -36,8 +36,8 @@ async function createWindow() {
   }
 
   win = new BrowserWindow({
-    width: 600,
-    height: 116,
+    width: 640,
+    height: 900,
     show: true,
     frame: false, // true에서 false로 변경 (상단바 제거)
     transparent: true, // false에서 true로 변경 (투명 배경)
