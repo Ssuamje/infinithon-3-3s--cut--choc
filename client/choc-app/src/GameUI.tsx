@@ -19,6 +19,129 @@ interface GameUIProps {
   isCameraOn: boolean;
 }
 
+export const GameUI: React.FC<GameUIProps> = ({
+  hearts,
+  combo,
+  score,
+  isAlive,
+  gamePhase,
+  timeRemaining,
+  countdown,
+  isPaused,
+  showControlPanel,
+  onResetGame,
+  onTogglePause,
+  onToggleControlPanel,
+  onToggleCamera,
+  isCameraOn,
+}) => {
+  const timePercent = (timeRemaining / 6000) * 100;
+
+  return (
+    <Container>
+      {/* 상단 상태바 */}
+      <StatusBar $gamePhase={gamePhase}>
+        {/* 왼쪽: 라이프와 콤보 */}
+        <Section>
+          <LifeContainer>
+            {[1, 2, 3].map((i) => (
+              <Heart key={i} $active={i <= hearts}>
+                💧
+              </Heart>
+            ))}
+          </LifeContainer>
+
+          {combo > 0 && (
+            <ComboContainer>
+              <ComboNumber $gamePhase={gamePhase}>{combo}</ComboNumber>
+              <ComboLabel>콤보</ComboLabel>
+            </ComboContainer>
+          )}
+        </Section>
+
+        {/* 중앙: 상태 점 (피버 모드가 아닐 때만 배지 표시) */}
+        <Section $align="center">
+          <StatusDot $gamePhase={gamePhase} />
+          {gamePhase === "fever" && <FeverBadge>🔥 FEVER MODE</FeverBadge>}
+        </Section>
+
+        {/* 오른쪽: 점수와 버튼들 */}
+        <Section $align="right">
+          <ScoreContainer>
+            <Score>{score.toLocaleString()}</Score>
+            <ScoreLabel>점수</ScoreLabel>
+          </ScoreContainer>
+
+          <ButtonContainer>
+            <Button
+              $variant="camera"
+              $active={isCameraOn}
+              onClick={onToggleCamera}
+              title={isCameraOn ? "카메라 끄기" : "카메라 켜기"}
+            >
+              📷
+            </Button>
+
+            <Button
+              onClick={onTogglePause}
+              title={isPaused ? "게임 재개" : "게임 일시정지"}
+            >
+              {isPaused ? "▶️" : "⏸️"}
+            </Button>
+
+            <Button
+              onClick={onToggleControlPanel}
+              title={showControlPanel ? "설정 패널 숨기기" : "설정 패널 보기"}
+            >
+              ⚙️
+            </Button>
+          </ButtonContainer>
+        </Section>
+      </StatusBar>
+
+      {/* 타이머 게이지 */}
+      <TimerSection>
+        <TimerBar>
+          <TimerProgress $width={timePercent} $gamePhase={gamePhase} />
+        </TimerBar>
+
+        {countdown !== null && (
+          <Countdown>
+            <CountdownText>{countdown}</CountdownText>
+            <CountdownMessage>지금 눈을 감아주세요!</CountdownMessage>
+          </Countdown>
+        )}
+      </TimerSection>
+
+      {/* 피버 모드 전용 고정 UI */}
+      {gamePhase === "fever" && (
+        <FeverOverlay>
+          <FeverContainer>
+            <FeverParticles />
+            <FeverTitle>🔥 FEVER MODE 🔥</FeverTitle>
+            <FeverSubtitle>모든 점수가 5배로!</FeverSubtitle>
+            <FeverComboDisplay>
+              <FeverComboNumber>{combo}</FeverComboNumber>
+              <FeverMultiplier>COMBO × 5</FeverMultiplier>
+            </FeverComboDisplay>
+          </FeverContainer>
+        </FeverOverlay>
+      )}
+
+      {/* 게임 오버 화면 */}
+      {!isAlive && (
+        <GameOverlay>
+          <GameOverContent>
+            <GameOverTitle>게임 오버</GameOverTitle>
+            <GameOverScore>최종 점수: {score.toLocaleString()}</GameOverScore>
+            <RestartButton onClick={onResetGame}>다시 시작</RestartButton>
+          </GameOverContent>
+        </GameOverlay>
+      )}
+    </Container>
+  );
+};
+
 // 애니메이션 키프레임
 const comboPulse = keyframes`
   0%, 100% { transform: scale(1); }
@@ -30,9 +153,18 @@ const dangerPulse = keyframes`
   50% { transform: scale(1.2); opacity: 0.8; }
 `;
 
-const feverPulse = keyframes`
-  0%, 100% { box-shadow: 0 4px 20px rgba(255, 107, 53, 0.2); }
-  50% { box-shadow: 0 8px 40px rgba(255, 107, 53, 0.4); }
+const gentlePulse = keyframes`
+  0%, 100% { transform: scale(1); opacity: 0.9; }
+  50% { transform: scale(1.02); opacity: 1; }
+`;
+
+const feverGlow = keyframes`
+  0%, 100% {
+    box-shadow: 0 0 30px rgba(255, 107, 53, 0.3), inset 0 0 30px rgba(255, 107, 53, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 50px rgba(255, 107, 53, 0.5), inset 0 0 40px rgba(255, 107, 53, 0.2);
+  }
 `;
 
 const fadeInUp = keyframes`
@@ -48,22 +180,18 @@ const fadeInUp = keyframes`
 
 // 스타일 컴포넌트
 const Container = styled.div`
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  position: relative; // fixed에서 relative로 변경
+  width: 100%;
   pointer-events: none;
   z-index: 1000;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  margin-bottom: 20px; // 아래 여백 추가
 `;
 
 const StatusBar = styled.div<{ $gamePhase: string }>`
-  position: absolute;
-  top: clamp(16px, 3vw, 24px);
-  left: 50%;
-  transform: translateX(-50%);
+  position: relative; // absolute에서 relative로 변경
   width: clamp(300px, 85vw, 600px);
+  margin: 0 auto; // 중앙 정렬
   padding: clamp(12px, 2.5vw, 16px) clamp(16px, 4vw, 24px);
   border-radius: clamp(16px, 4vw, 24px);
   backdrop-filter: blur(20px);
@@ -102,7 +230,8 @@ const StatusBar = styled.div<{ $gamePhase: string }>`
     css`
       background: rgba(249, 115, 22, 0.15);
       border-color: rgba(249, 115, 22, 0.4);
-      animation: ${feverPulse} 2s infinite, ${fadeInUp} 0.6s ease-out;
+      animation: ${gentlePulse} 3s ease-in-out infinite,
+        ${fadeInUp} 0.6s ease-out;
     `}
 `;
 
@@ -154,7 +283,7 @@ const ComboNumber = styled.div<{ $gamePhase: string }>`
   ${({ $gamePhase }) =>
     $gamePhase === "warning" &&
     css`
-      animation: ${comboPulse} 0.5s infinite;
+      animation: ${comboPulse} 0.8s ease-in-out infinite;
     `}
 `;
 
@@ -191,7 +320,7 @@ const StatusDot = styled.div<{ $gamePhase: string }>`
     $gamePhase === "danger" &&
     css`
       background: linear-gradient(135deg, #ef4444, #dc2626);
-      animation: ${dangerPulse} 1s infinite;
+      animation: ${dangerPulse} 1.5s ease-in-out infinite;
     `}
 
   ${({ $gamePhase }) =>
@@ -288,12 +417,10 @@ const Button = styled.button<{ $variant?: string; $active?: boolean }>`
 `;
 
 const TimerSection = styled.div`
-  position: absolute;
-  top: clamp(80px, 15vw, 100px);
-  left: 50%;
-  transform: translateX(-50%);
   width: clamp(300px, 85vw, 600px);
+  margin: 0 auto; // 중앙 정렬
   pointer-events: none;
+  margin-top: 16px; // 위 여백 추가
 `;
 
 const TimerBar = styled.div`
@@ -423,112 +550,105 @@ const RestartButton = styled.button`
   }
 `;
 
-export const GameUI: React.FC<GameUIProps> = ({
-  hearts,
-  combo,
-  score,
-  isAlive,
-  gamePhase,
-  timeRemaining,
-  countdown,
-  isPaused,
-  showControlPanel,
-  onResetGame,
-  onTogglePause,
-  onToggleControlPanel,
-  onToggleCamera,
-  isCameraOn,
-}) => {
-  const timePercent = (timeRemaining / 6000) * 100;
+// 피버 모드 전용 고정 UI
+const FeverOverlay = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  z-index: 1500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`;
 
-  return (
-    <Container>
-      {/* 상단 상태바 */}
-      <StatusBar $gamePhase={gamePhase}>
-        {/* 왼쪽: 라이프와 콤보 */}
-        <Section>
-          <LifeContainer>
-            {[1, 2, 3].map((i) => (
-              <Heart key={i} $active={i <= hearts}>
-                💧
-              </Heart>
-            ))}
-          </LifeContainer>
-
-          {combo > 0 && (
-            <ComboContainer>
-              <ComboNumber $gamePhase={gamePhase}>{combo}</ComboNumber>
-              <ComboLabel>콤보</ComboLabel>
-            </ComboContainer>
-          )}
-        </Section>
-
-        {/* 중앙: 상태 점과 피버 배지 */}
-        <Section $align="center">
-          <StatusDot $gamePhase={gamePhase} />
-          {gamePhase === "fever" && (
-            <FeverBadge>🔥 FEVER x5</FeverBadge>
-          )}
-        </Section>
-
-        {/* 오른쪽: 점수와 버튼들 */}
-        <Section $align="right">
-          <ScoreContainer>
-            <Score>{score.toLocaleString()}</Score>
-            <ScoreLabel>점수</ScoreLabel>
-          </ScoreContainer>
-
-          <ButtonContainer>
-            <Button
-              $variant="camera"
-              $active={isCameraOn}
-              onClick={onToggleCamera}
-              title={isCameraOn ? "카메라 끄기" : "카메라 켜기"}
-            >
-              📷
-            </Button>
-
-            <Button
-              onClick={onTogglePause}
-              title={isPaused ? "게임 재개" : "게임 일시정지"}
-            >
-              {isPaused ? "▶️" : "⏸️"}
-            </Button>
-
-            <Button
-              onClick={onToggleControlPanel}
-              title={showControlPanel ? "설정 패널 숨기기" : "설정 패널 보기"}
-            >
-              ⚙️
-            </Button>
-          </ButtonContainer>
-        </Section>
-      </StatusBar>
-
-      {/* 타이머 게이지 */}
-      <TimerSection>
-        <TimerBar>
-          <TimerProgress $width={timePercent} $gamePhase={gamePhase} />
-        </TimerBar>
-
-        {countdown !== null && (
-          <Countdown>
-            <CountdownText>{countdown}</CountdownText>
-            <CountdownMessage>지금 눈을 감아주세요!</CountdownMessage>
-          </Countdown>
-        )}
-      </TimerSection>
-
-      {/* 게임 오버 화면 */}
-      {!isAlive && (
-        <GameOverlay>
-          <GameOverContent>
-            <GameOverTitle>게임 오버</GameOverTitle>
-            <GameOverScore>최종 점수: {score.toLocaleString()}</GameOverScore>
-            <RestartButton onClick={onResetGame}>다시 시작</RestartButton>
-          </GameOverContent>
-        </GameOverlay>
-      )}
-    </Container>
+const FeverContainer = styled.div`
+  position: relative;
+  background: linear-gradient(
+    135deg,
+    rgba(249, 115, 22, 0.95),
+    rgba(234, 88, 12, 0.85)
   );
-};
+  backdrop-filter: blur(30px);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: clamp(12px, 3vw, 16px);
+  padding: clamp(8px, 2vw, 12px) clamp(12px, 3vw, 16px);
+  text-align: center;
+  box-shadow: 0 8px 24px rgba(249, 115, 22, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  animation: ${feverGlow} 2s ease-in-out infinite;
+  max-width: 200px;
+  width: 60vw;
+`;
+
+const FeverTitle = styled.h1`
+  font-size: clamp(12px, 3vw, 14px);
+  font-weight: 700;
+  color: white;
+  margin: 0 0 4px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  letter-spacing: 0.05em;
+`;
+
+const FeverSubtitle = styled.p`
+  font-size: clamp(9px, 2vw, 11px);
+  color: rgba(255, 255, 255, 0.9);
+  margin: 0 0 8px;
+  font-weight: 500;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+`;
+
+const FeverComboDisplay = styled.div`
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: clamp(6px, 1.5vw, 8px);
+  padding: clamp(6px, 1.5vw, 8px);
+  margin-bottom: 0;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+`;
+
+const FeverComboNumber = styled.div`
+  font-size: clamp(16px, 4vw, 20px);
+  font-weight: 800;
+  color: white;
+  line-height: 1;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  animation: ${gentlePulse} 2s ease-in-out infinite;
+`;
+
+const FeverMultiplier = styled.div`
+  font-size: clamp(8px, 2vw, 10px);
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 600;
+  margin-top: 2px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+`;
+
+const FeverParticles = styled.div`
+  position: absolute;
+  top: -5px;
+  left: -5px;
+  right: -5px;
+  bottom: -5px;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: clamp(12px, 3vw, 16px);
+
+  &::before {
+    content: "🔥";
+    position: absolute;
+    font-size: 12px;
+    animation: ${gentlePulse} 1.5s ease-in-out infinite;
+    top: 5%;
+    left: 5%;
+  }
+
+  &::after {
+    content: "✨";
+    position: absolute;
+    font-size: 10px;
+    animation: ${gentlePulse} 2s ease-in-out infinite reverse;
+    bottom: 5%;
+    right: 5%;
+  }
+`;
