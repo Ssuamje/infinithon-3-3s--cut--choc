@@ -162,18 +162,18 @@ export const GameUI: React.FC<GameUIProps> = ({
       </StatusBar>
 
       {/* 타이머 게이지 */}
-      {/* <TimerSection>
+      <TimerSection>
         <TimerBar>
           <TimerProgress $width={timePercent} $gamePhase={gamePhase} />
         </TimerBar>
 
-        {countdown !== null && (
+        {/* {countdown !== null && (
           <Countdown>
             <CountdownText>{countdown}</CountdownText>
             <CountdownMessage>지금 눈을 감아주세요!</CountdownMessage>
           </Countdown>
-        )}
-      </TimerSection> */}
+        )} */}
+      </TimerSection>
 
       {/* 투명도 조절 메뉴 */}
       {showContextMenu && (
