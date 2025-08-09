@@ -3,12 +3,10 @@ import { useCamera } from "./hooks/useCamera";
 import { useDisplaySettings } from "./hooks/useDisplaySettings";
 import { useBlinkDetector } from "./useBlinkDetector";
 import { useGameLogic } from "./useGameLogic";
-import { useBlinkTimer } from "./hooks/useBlinkTimer";
 import { GameUI } from "./GameUI";
 import { VideoDisplay } from "./components/VideoDisplay";
 import { ControlPanel } from "./components/ControlPanel";
-import { BlinkWarningOverlay } from "./components/BlinkWarningOverlay";
-import { useState, useCallback, useEffect } from "react";
+import { useState } from "react";
 import { useMicVAD } from "./hooks/useMicVAD";
 
 export default function App() {
@@ -38,38 +36,6 @@ export default function App() {
 
   // 🎤 VAD 상태 (표시용)
   const vad = useMicVAD(true);
-
-  // 깜빡임 타이머 완료 콜백 (5초 내 5번 성공 시 하트 복구, 실패 시 감소)
-  const handleBlinkTimerComplete = useCallback(
-    (success: boolean, blinkCount: number) => {
-      if (success) {
-        console.log(`🎉 눈물 복구 성공! ${blinkCount}번 깜빡임`);
-        restoreHeart();
-      } else {
-        console.log(`💔 눈물 복구 실패! ${blinkCount}번만 깜빡임`);
-        loseHeart();
-      }
-    },
-    [restoreHeart, loseHeart]
-  );
-
-  // 깜빡임 타이머 (5초, 5회)
-  const blinkTimer = useBlinkTimer(
-    blink.lastBlinkAt,
-    5000,
-    gameState.hearts,
-    5,
-    handleBlinkTimerComplete,
-    gameState.overlayTimeRemaining
-  );
-
-  // 오버레이 활성 여부
-  const isOverlayActive =
-    gameState.timeRemaining <= 0 && gameState.overlayTimeRemaining > 0;
-
-  useEffect(() => {
-    // 오버레이 상태 변경 훅 (내부 처리용 - 별도 로직 없음)
-  }, [isOverlayActive]);
 
   const isBlinking =
     blink.state === "CLOSED" || blink.state === "CLOSING";
@@ -116,23 +82,6 @@ export default function App() {
         )}
       </div>
 
-      {/* 깜빡임 경고 오버레이 - 하트를 잃었을 때만 표시하고, 완료되면 숨김 */}
-      <BlinkWarningOverlay
-        isVisible={(() => {
-          const timeCondition = gameState.timeRemaining <= 0;
-          const overlayTimeCondition =
-            gameState.overlayTimeRemaining > 0;
-          return timeCondition && overlayTimeCondition;
-        })()}
-        progress={blinkTimer.progress}
-        timeWithoutBlink={blinkTimer.timeWithoutBlink}
-        overlayTimeRemaining={gameState.overlayTimeRemaining}
-        combo={gameState.combo}
-        score={gameState.score}
-        blinkCount={blinkTimer.blinkCount}
-        blinkThreshold={5}
-      />
-
       {/* 디버깅용 로그 (개발 중에만 표시) */}
       {process.env.NODE_ENV === "development" && (
         <div
@@ -149,41 +98,15 @@ export default function App() {
           }}
         >
           <div>Hearts: {gameState.hearts}/3</div>
-          <div>
-            Overlay Visible:{" "}
-            {gameState.hearts < 3 && gameState.overlayTimeRemaining > 0
-              ? "Yes"
-              : "No"}
-          </div>
-          <div>Blink Count: {blinkTimer.blinkCount}/5</div>
-          <div>Is Completed: {blinkTimer.isCompleted ? "Yes" : "No"}</div>
-          <div>BlinkTimer Progress: {blinkTimer.progress.toFixed(1)}%</div>
-          <div>Is Warning: {blinkTimer.isWarning ? "Yes" : "No"}</div>
-          <div>
-            Overlay Time: {Math.floor(gameState.overlayTimeRemaining / 1000)}s
-          </div>
           <div>Game Time: {Math.floor(gameState.timeRemaining / 1000)}s</div>
-          <div>Raw Overlay Time: {gameState.overlayTimeRemaining}ms</div>
           <div>Raw Game Time: {gameState.timeRemaining}ms</div>
           <div>Last Blink: {blink.lastBlinkAt ? "Yes" : "No"}</div>
-          <div>
-            Challenge Start:{" "}
-            {blinkTimer.timeWithoutBlink > 0 ? "Active" : "Inactive"}
-          </div>
           <div>Current Time: {new Date().toLocaleTimeString()}</div>
           <div>
             Last Blink Time:{" "}
             {blink.lastBlinkAt
               ? new Date(blink.lastBlinkAt).toLocaleTimeString()
               : "None"}
-          </div>
-          <div>
-            Timer State: {blinkTimer.isCompleted ? "Completed" : "Running"}
-          </div>
-          <div>
-            Overlay Condition: Hearts &lt; 3:{" "}
-            {gameState.hearts < 3 ? "Yes" : "No"}, Not Completed:{" "}
-            {!blinkTimer.isCompleted ? "Yes" : "No"}
           </div>
         </div>
       )}
