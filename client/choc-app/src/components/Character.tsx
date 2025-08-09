@@ -70,8 +70,8 @@ const styles: Record<string, React.CSSProperties> = {
     gap: "clamp(12px, 2.5vw, 20px)", // 반응형 gap
   },
   eye: {
-    width: "clamp(18px, 4vw, 30px)", // 반응형 크기
-    height: "clamp(18px, 4vw, 30px)", // 반응형 크기
+    width: "clamp(24px, 4vw, 30px)", // 반응형 크기
+    height: "clamp(24px, 4vw, 30px)", // 반응형 크기
     background: "#fff",
     borderRadius: "50%",
     border: "clamp(1px, 0.3vw, 2px) solid #333", // 반응형 border
@@ -90,8 +90,8 @@ const styles: Record<string, React.CSSProperties> = {
     top: "50%",
     left: "50%",
     transform: "translate(-50%, -50%)",
-    width: "clamp(5px, 1.2vw, 8px)", // 반응형 크기
-    height: "clamp(5px, 1.2vw, 8px)", // 반응형 크기
+    width: "clamp(8px, 1.2vw, 12px)", // 반응형 크기
+    height: "clamp(8px, 1.2vw, 12px)", // 반응형 크기
     background: "#000",
     borderRadius: "50%",
   },

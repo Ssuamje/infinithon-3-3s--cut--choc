@@ -1,4 +1,4 @@
-import { app, BrowserWindow, systemPreferences, Tray, Menu, nativeImage, screen, } from "electron";
+import { app, BrowserWindow, systemPreferences, Tray, Menu, nativeImage, screen, ipcMain, } from "electron";
 import * as path from "path";
 import { fileURLToPath } from "url";
 process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = "true";
@@ -7,6 +7,7 @@ const __dirname = path.dirname(__filename);
 let win = null;
 let tray = null;
 let isQuitting = false;
+let blinkCount = 0;
 // 아이콘 캐시
 let openEyeImg = null;
 let closedEyeImg = null;
@@ -24,7 +25,7 @@ async function createWindow() {
     win = new BrowserWindow({
         width: 480, // 360에서 640으로 조정 (UI 크기에 맞춤)
         height: 800, // 460에서 700으로 조정 (UI 높이에 맞춤)
-        show: false, // 트레이로 토글
+        show: true, // 초기에 화면 표시
         frame: false, // ✅ 상단바 제거 (프레임리스)
         transparent: false, // 배경 투명은 필요 시 true로
         opacity: 0.95, // 초기 투명도
@@ -62,6 +63,8 @@ async function createWindow() {
     // 창 표시/숨김 시 트레이 아이콘 업데이트
     win.on("show", updateTrayVisual);
     win.on("hide", updateTrayVisual);
+    // IPC 통신 설정
+    setupIPC();
 }
 function loadTrayImages() {
     const assetsPath = path.join(__dirname, "../../assets");
@@ -81,8 +84,8 @@ function createTray() {
     }
     if (!openEyeImg || !closedEyeImg)
         loadTrayImages();
-    tray = new Tray(openEyeImg);
-    tray.setToolTip("👁️ Blink App");
+    tray = new Tray(createTrayIcon());
+    updateTrayTooltip();
     // 좌클릭 → 창 토글
     tray.on("click", toggleMainWindow);
     // 우클릭 → 트레이 전용 팝업 (창 포커스와 무관하게 뜸)
@@ -163,17 +166,48 @@ function positionWindowNearTray() {
         : Math.round(trayBounds.y - winBounds.height - 8);
     win.setPosition(x, y, false);
 }
+function createTrayIcon() {
+    // 기본 아이콘을 사용 (Canvas는 복잡하므로 생략)
+    const isVisible = win?.isVisible();
+    return isVisible ? openEyeImg : closedEyeImg;
+}
 function updateTrayVisual() {
-    if (!tray || !openEyeImg || !closedEyeImg)
+    if (!tray)
         return;
-    if (win?.isVisible()) {
-        tray.setImage(openEyeImg);
-        tray.setToolTip("👁️ Blink App (실행중)");
+    try {
+        // Canvas 없이 간단한 텍스트 기반 아이콘
+        const icon = win?.isVisible() ? openEyeImg : closedEyeImg;
+        if (icon) {
+            tray.setImage(icon);
+        }
+        updateTrayTooltip();
     }
-    else {
-        tray.setImage(closedEyeImg);
-        tray.setToolTip("👁️ Blink App (숨김/대기)");
+    catch (error) {
+        console.error('트레이 아이콘 업데이트 오류:', error);
+        // 오류 시 기본 아이콘 사용
+        if (openEyeImg) {
+            tray.setImage(openEyeImg);
+        }
+        updateTrayTooltip();
     }
+}
+function updateTrayTooltip() {
+    if (!tray)
+        return;
+    const status = win?.isVisible() ? "실행중" : "숨김/대기";
+    tray.setToolTip(`👁️ Blink App (${status}) - 깜빡임: ${blinkCount}회`);
+}
+// IPC 통신 설정
+function setupIPC() {
+    // 렌더러에서 깜빡임 카운트 업데이트 받기
+    ipcMain.on('update-blink-count', (event, count) => {
+        blinkCount = count;
+        updateTrayVisual();
+    });
+    // 렌더러에서 트레이 상태 요청
+    ipcMain.handle('get-blink-count', () => {
+        return blinkCount;
+    });
 }
 app.whenReady().then(async () => {
     if (isMac && app.dock)

@@ -98,19 +98,24 @@ export function useGameLogic(
         let newPhase = prev.gamePhase;
         let newCountdown = prev.countdown;
 
-        // 게임 페이즈 결정
-        if (newTimeRemaining <= DANGER_THRESHOLD) {
-          newPhase = "danger";
-          // 3-2-1 카운트다운 시작
-          if (prev.countdown === null) {
-            newCountdown = 3;
+        // 게임 페이즈 결정 (피버 모드가 아닐 때만)
+        if (prev.gamePhase !== "fever") {
+          if (newTimeRemaining <= DANGER_THRESHOLD) {
+            newPhase = "danger";
+            // 3-2-1 카운트다운 시작
+            if (prev.countdown === null) {
+              newCountdown = 3;
+            }
+          } else if (newTimeRemaining <= WARNING_THRESHOLD) {
+            newPhase = "warning";
+            newCountdown = null;
+          } else {
+            newPhase = "idle";
+            newCountdown = null;
           }
-        } else if (newTimeRemaining <= WARNING_THRESHOLD) {
-          newPhase = "warning";
-          newCountdown = null;
         } else {
-          newPhase = "idle";
-          newCountdown = null;
+          // 피버 모드 중에는 페이즈 유지
+          newPhase = "fever";
         }
 
         return {
@@ -181,16 +186,21 @@ export function useGameLogic(
           // 시간 연장 (깜빡임마다 1초씩)
           newTimeRemaining = Math.min(GAME_DURATION, prev.timeRemaining + 1000);
 
-          // 게임 페이즈 재계산
-          if (newTimeRemaining <= DANGER_THRESHOLD) {
-            newPhase = "danger";
-            newCountdown = 3;
-          } else if (newTimeRemaining <= WARNING_THRESHOLD) {
-            newPhase = "warning";
-            newCountdown = null;
+          // 게임 페이즈 재계산 (피버 모드가 아닐 때만)
+          if (prev.gamePhase !== "fever") {
+            if (newTimeRemaining <= DANGER_THRESHOLD) {
+              newPhase = "danger";
+              newCountdown = 3;
+            } else if (newTimeRemaining <= WARNING_THRESHOLD) {
+              newPhase = "warning";
+              newCountdown = null;
+            } else {
+              newPhase = "idle";
+              newCountdown = null;
+            }
           } else {
-            newPhase = "idle";
-            newCountdown = null;
+            // 피버 모드 유지
+            newPhase = "fever";
           }
         }
 
@@ -231,25 +241,29 @@ export function useGameLogic(
     }
   }, [gameState.timeRemaining, gameState.isAlive]);
 
-  // 피버 모드 체크
+  // 피버 모드 체크 - 안정화된 로직
   useEffect(() => {
-    if (gameState.combo >= FEVER_THRESHOLD && gameState.gamePhase !== "fever") {
-      setGameState((prev) => ({ ...prev, gamePhase: "fever" }));
-    } else if (
-      gameState.combo < FEVER_THRESHOLD &&
-      gameState.gamePhase === "fever"
-    ) {
-      setGameState((prev) => ({
-        ...prev,
-        gamePhase:
-          prev.timeRemaining <= DANGER_THRESHOLD
-            ? "danger"
-            : prev.timeRemaining <= WARNING_THRESHOLD
-            ? "warning"
-            : "idle",
-      }));
-    }
-  }, [gameState.combo, gameState.gamePhase, gameState.timeRemaining]);
+    setGameState((prev) => {
+      // 피버 모드 진입 조건
+      if (prev.combo >= FEVER_THRESHOLD && prev.gamePhase !== "fever") {
+        return { ...prev, gamePhase: "fever" };
+      }
+      
+      // 피버 모드 종료 조건 (콤보가 크게 떨어지거나 0이 되었을 때만)
+      if (prev.gamePhase === "fever" && prev.combo < FEVER_THRESHOLD - 5) {
+        // 시간 기반으로 새로운 페이즈 결정
+        let newPhase: "idle" | "warning" | "danger" = "idle";
+        if (prev.timeRemaining <= DANGER_THRESHOLD) {
+          newPhase = "danger";
+        } else if (prev.timeRemaining <= WARNING_THRESHOLD) {
+          newPhase = "warning";
+        }
+        return { ...prev, gamePhase: newPhase };
+      }
+      
+      return prev;
+    });
+  }, [gameState.combo]);
 
   return {
     gameState,

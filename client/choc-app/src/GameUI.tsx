@@ -41,8 +41,8 @@ export const GameUI: React.FC<GameUIProps> = ({
     <Container>
       {/* 상단 상태바 */}
       <StatusBar $gamePhase={gamePhase}>
-        {/* 왼쪽: 라이프와 콤보 */}
         <Section>
+          {/* 왼쪽: 라이프와 콤보 */}
           <LifeContainer>
             {[1, 2, 3].map((i) => (
               <Heart key={i} $active={i <= hearts}>
@@ -51,18 +51,18 @@ export const GameUI: React.FC<GameUIProps> = ({
             ))}
           </LifeContainer>
 
+          {/* 중앙: 상태 점 (피버 모드가 아닐 때만 배지 표시) */}
+          {gamePhase === "fever" ? (
+            <FeverBadge>🔥</FeverBadge>
+          ) : (
+            <StatusDot $gamePhase={gamePhase} />
+          )}
           {combo > 0 && (
             <ComboContainer>
               <ComboNumber $gamePhase={gamePhase}>{combo}</ComboNumber>
               <ComboLabel>콤보</ComboLabel>
             </ComboContainer>
           )}
-        </Section>
-
-        {/* 중앙: 상태 점 (피버 모드가 아닐 때만 배지 표시) */}
-        <Section $align="center">
-          <StatusDot $gamePhase={gamePhase} />
-          {gamePhase === "fever" && <FeverBadge>🔥 FEVER MODE</FeverBadge>}
         </Section>
 
         {/* 오른쪽: 점수와 버튼들 */}
@@ -552,12 +552,9 @@ const RestartButton = styled.button`
 
 // 피버 모드 전용 고정 UI
 const FeverOverlay = styled.div`
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
+  position: relative;
+  margin: 16px 0;
   pointer-events: none;
-  z-index: 1500;
   display: flex;
   align-items: center;
   justify-content: center;

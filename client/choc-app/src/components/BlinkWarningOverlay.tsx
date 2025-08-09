@@ -8,6 +8,7 @@ interface BlinkWarningOverlayProps {
   timeWithoutBlink: number; // milliseconds
   combo?: number;
   score?: number;
+  totalBlinks?: number; // 총 깜빡임 횟수
 }
 
 // 애니메이션
@@ -149,6 +150,7 @@ export const BlinkWarningOverlay: React.FC<BlinkWarningOverlayProps> = ({
   timeWithoutBlink,
   combo = 0,
   score = 0,
+  totalBlinks = 0,
 }) => {
   const secondsWithoutBlink = Math.floor(timeWithoutBlink / 1000);
   const isWarning = progress >= 100;
@@ -173,6 +175,9 @@ export const BlinkWarningOverlay: React.FC<BlinkWarningOverlayProps> = ({
         </ProgressContainer>
         
         <StatsRow>
+          <StatItem>
+            👁️ 깜빡임: <StatValue>{totalBlinks}</StatValue>
+          </StatItem>
           <StatItem>
             🔥 콤보: <StatValue>{combo}</StatValue>
           </StatItem>

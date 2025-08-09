@@ -7,7 +7,8 @@ import { GameUI } from "./GameUI";
 import { VideoDisplay } from "./components/VideoDisplay";
 import { ControlPanel } from "./components/ControlPanel";
 import { BlinkWarningOverlay } from "./components/BlinkWarningOverlay";
-import { useState } from "react";
+import { FullScreenWarningOverlay } from "./components/FullScreenWarningOverlay";
+import { useState, useEffect } from "react";
 
 export default function App() {
   // 카메라 관련 로직
@@ -44,6 +45,13 @@ export default function App() {
 
   const isBlinking = blink.state === "CLOSED" || blink.state === "CLOSING";
 
+  // 깜빡임 카운트가 변경될 때마다 메인 프로세스에 전송
+  useEffect(() => {
+    if (window.blinkAPI) {
+      window.blinkAPI.updateBlinkCount(blink.blinks);
+    }
+  }, [blink.blinks]);
+
   // 카메라 표시 토글 함수 (스트림은 유지하고 화면만 숨김/표시)
   const toggleCamera = () => {
     if (showFace) {
@@ -75,6 +83,16 @@ export default function App() {
 
   return (
     <div style={styles.wrap}>
+      {/* 6초 후 전체화면 경고 오버레이 */}
+      <FullScreenWarningOverlay
+        isVisible={blinkTimer.isWarning}
+        totalBlinks={blink.blinks}
+        onBlink={() => {
+          // 강제로 깜빡임 상태를 리셋하여 오버레이를 닫음
+          // 실제 깜빡임이 감지되면 자동으로 타이머가 리셋됨
+        }}
+      />
+
       {/* 깜빡임 경고 오버레이 - 모든 창 위에 표시 */}
       <BlinkWarningOverlay
         isVisible={blinkTimer.progress > 50 || blinkTimer.isWarning} // 50% 이후부터 표시
@@ -82,6 +100,7 @@ export default function App() {
         timeWithoutBlink={blinkTimer.timeWithoutBlink}
         combo={gameState.combo}
         score={gameState.score}
+        totalBlinks={blink.blinks}
       />
 
       {/* 게임 UI - 항상 표시 */}
@@ -137,12 +156,12 @@ export default function App() {
       />
 
       {/* 캘리브레이션/HUD 정보: 기존 문구 유지 + 확장 정보 별도 표기 */}
-      {showHUD && <p style={styles.hud}>{hudText}</p>}
+      {/* {showHUD && <p style={styles.hud}>{hudText}</p>} */}
 
-      <p style={styles.tip}>
+      {/* <p style={styles.tip}>
         ※ 완전한 깜빡임 사이클(뜸→감음→뜸)을 감지합니다. 눈을 감고만 있으면
         카운트되지 않아요!
-      </p>
+      </p> */}
     </div>
   );
 }
