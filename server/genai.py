@@ -147,8 +147,8 @@ def plot_blink_data(cleaned_data: pd.DataFrame, date: str):
     # 이모지 위치도 인덱스 길이 기반으로
     plt.text(len(s) - 0.9, IDEAL_BLINK_PER_MINUTE, '😊', fontname="sans-serif", fontsize=14, ha='center', va='bottom')
 
-    plt.title(f"오늘의 눈 깜빡임 기록", fontname='NanumSquareRound', fontsize=14, fontweight='bold')
-    plt.xlabel('시간대', fontname='NanumSquareRound', fontsize=10)
+    # plt.title(f"오늘의 눈 깜빡임 기록", fontname='NanumSquareRound', fontsize=14, fontweight='bold')
+    plt.xlabel('시 (Hour)', fontname='NanumSquareRound', fontsize=10)
     plt.ylabel('평균 분당 눈 깜빡임 수', fontname='NanumSquareRound', fontsize=10)
     plt.axhline(y=IDEAL_BLINK_PER_MINUTE, linestyle='--', alpha=0.5)
 
@@ -196,7 +196,7 @@ def generate_report_text(user_info: dict = None, histories: dict = None) -> str:
 
     try:
         completion = client.chat.completions.create(
-            model="gpt-4.1-nano",
+            model="gpt-4.1-mini",
             messages=[
                 {
                     "role": "system", "content": system_prompt
@@ -234,6 +234,7 @@ def generate_report(raw_data: pd.DataFrame, user_info: dict = None) -> str:
 
     # Return the report text and image
     return {
+        "user_name": user_info.get('user_name', '사용자'),
         "report": report_text,
         "daily_blink_per_minute": daily_bpm,
         "daily_line_plot": image,

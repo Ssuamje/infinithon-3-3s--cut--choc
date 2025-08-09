@@ -42,8 +42,11 @@ app.add_middleware(
 
 data_store: Dict[str, Dict] = {}
 history_store: Dict[str, Dict] = {}
-for name in ['increase', 'decrease', 'stable', 'month', 'week', 'first']:
-    history_store[name] = pd.read_csv(f'data/blink_data_{name}.csv')
+for user_name, name in zip(
+    ['판교 개발자 영진', '노모어피자 치즈크러스트', '애플 디톡스', '야근조아', '퇴근덕후', '김연진사생팬'],
+    ['increase', 'decrease', 'stable', 'month', 'week', 'first']
+):
+    history_store[name] = (user_name, pd.read_csv(f'data/blink_data_{name}.csv'))
 
 async def cleanup_loop():
     """1시간 이상 된 항목 정리 루프 (백그라운드 태스크)"""
@@ -82,8 +85,9 @@ async def send_processed_data(request_id: str):
         return {"message": "No data found for the given request ID"}
 
     if analyze_tablet_data and generate_report:
-        history_df = history_store['increase']
+        user_name, history_df = history_store['increase']
         user_info = {
+            'user_name': user_name,
             'joined_at': history_df['TIMESTAMP'].min(),
         }
         preprocessed_data = pd.concat([history_df, pd.DataFrame({"TIMESTAMP": [time_str.split('.')[0] for time_str in saved['payload']['events']]})])
