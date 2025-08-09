@@ -2,13 +2,14 @@
 import time
 import contextlib
 import asyncio
+import pandas as pd
+import queue
+import base64
+from datetime import datetime
 from typing import Dict
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import pandas as pd
-import queue
-import base64
 
 
 # (패키지/모듈 실행 모두 대응)
@@ -85,9 +86,8 @@ async def send_processed_data(request_id: str):
         user_info = {
             'joined_at': history_df['TIMESTAMP'].min(),
         }
-        preprocessed_data = pd.concat([history_df, pd.DataFrame({"TIMESTAMP": saved['payload']['events']})])
-        analyzed = analyze_tablet_data(preprocessed_data)
-        report = generate_report(preprocessed_data, analyzed, user_info=user_info)
+        preprocessed_data = pd.concat([history_df, pd.DataFrame({"TIMESTAMP": [time_str.split('.')[0] for time_str in saved['payload']['events']]})])
+        report = generate_report(preprocessed_data, user_info=user_info)
 
         # ✅ 이미지 바이트를 base64 문자열로 변환해서 JSON 직렬화 가능하게
         img_bytes = report.get("daily_line_plot")
