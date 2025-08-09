@@ -10,9 +10,11 @@ from pydantic import BaseModel
 try:
     from .genai import analyze_tablet_data, generate_report 
 except Exception:
+    print("Error importing relative genai module. Trying absolute import.")
     try:
         from genai import analyze_tablet_data, generate_report
     except Exception:
+        print("Error importing genai functions. Ensure genai directory is in the same directory or properly installed.")
         analyze_tablet_data = None
         generate_report = None
 
