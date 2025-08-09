@@ -63,7 +63,7 @@ export function VideoDisplay({
         </div>
 
         {!ready && !error && <div style={styles.overlay}>카메라 준비 중…</div>}
-        {error && <div style={styles.overlay}>에러: {error}</div>}
+        {/* {error && <div style={styles.overlay}>에러: {error}</div>} */}
       </div>
     );
   }
@@ -87,7 +87,7 @@ export function VideoDisplay({
       {showCharacter && <Character isBlinking={isBlinking} />}
 
       {!ready && !error && <div style={styles.overlay}>카메라 준비 중…</div>}
-      {error && <div style={styles.overlay}>에러: {error}</div>}
+      {/* {error && <div style={styles.overlay}>에러: {error}</div>} */}
     </div>
   );
 }

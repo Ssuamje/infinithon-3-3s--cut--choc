@@ -3,9 +3,11 @@ import { useCamera } from "./hooks/useCamera";
 import { useDisplaySettings } from "./hooks/useDisplaySettings";
 import { useBlinkDetector } from "./useBlinkDetector";
 import { useGameLogic } from "./useGameLogic";
+import { useBlinkTimer } from "./hooks/useBlinkTimer";
 import { GameUI } from "./GameUI";
 import { VideoDisplay } from "./components/VideoDisplay";
 import { ControlPanel } from "./components/ControlPanel";
+import { BlinkWarningOverlay } from "./components/BlinkWarningOverlay";
 import { useState } from "react";
 
 export default function App() {
@@ -38,6 +40,9 @@ export default function App() {
     blink.lastBlinkAt
   );
 
+  // 깜빡임 타이머 (6초)
+  const blinkTimer = useBlinkTimer(blink.lastBlinkAt, 6000);
+
   const isBlinking = blink.state === "CLOSED" || blink.state === "CLOSING";
 
   // 카메라 표시 토글 함수 (스트림은 유지하고 화면만 숨김/표시)
@@ -55,6 +60,15 @@ export default function App() {
 
   return (
     <div style={styles.wrap}>
+      {/* 깜빡임 경고 오버레이 - 모든 창 위에 표시 */}
+      <BlinkWarningOverlay
+        isVisible={blinkTimer.progress > 50 || blinkTimer.isWarning} // 50% 이후부터 표시
+        progress={blinkTimer.progress}
+        timeWithoutBlink={blinkTimer.timeWithoutBlink}
+        combo={gameState.combo}
+        score={gameState.score}
+      />
+
       {/* 게임 UI - 항상 표시 */}
       <GameUI
         hearts={gameState.hearts}
