@@ -1,18 +1,17 @@
+// src/App.tsx
+import { useEffect, useRef, useState } from "react";
 import { useCamera } from "./hooks/useCamera";
 import { useDisplaySettings } from "./hooks/useDisplaySettings";
 import { useBlinkDetector } from "./useBlinkDetector";
 import { useGameLogic } from "./useGameLogic";
-import { useBlinkTimer } from "./hooks/useBlinkTimer";
 import { GameUI } from "./GameUI";
 import { VideoDisplay } from "./components/VideoDisplay";
 import { ControlPanel } from "./components/ControlPanel";
-import { BlinkWarningOverlay } from "./components/BlinkWarningOverlay";
-import { useState } from "react";
+import { useMicVAD } from "./hooks/useMicVAD";
 
 export default function App() {
   // 카메라 관련 로직
-  const { videoRef, state, ready, error, startCamera, stopCamera } =
-    useCamera();
+  const { videoRef, state, ready, error, startCamera, stopCamera } = useCamera();
 
   // 화면 표시 설정 관련 로직
   const {
@@ -24,40 +23,92 @@ export default function App() {
     setShowCharacter,
   } = useDisplaySettings();
 
-  // HUD 표시 상태
+  // HUD / ControlPanel 표시 상태
   const [showHUD, setShowHUD] = useState(true);
-
-  // ControlPanel 표시 상태
   const [showControlPanel, setShowControlPanel] = useState(true);
 
   // 깜빡임 감지
   const blink = useBlinkDetector(videoRef);
 
   // 게임 로직
-  const { gameState, resetGame, togglePause } = useGameLogic(
-    blink.blinks,
-    blink.lastBlinkAt
-  );
+  const { gameState, resetGame, togglePause } =
+    useGameLogic(blink.blinks, blink.lastBlinkAt);
 
-  // 깜빡임 타이머 (6초)
-  const blinkTimer = useBlinkTimer(blink.lastBlinkAt, 6000);
+  // 🎤 VAD 상태 (표시용)
+  const vad = useMicVAD(true);
 
   const isBlinking = blink.state === "CLOSED" || blink.state === "CLOSING";
 
-  // 카메라 표시 토글 함수 (스트림은 유지하고 화면만 숨김/표시)
+  // === Blink 이벤트 기록용 ===
+  const [events, setEvents] = useState<string[]>([]);
+  const startedAt = useRef<string>(new Date().toISOString()); // 프로그램 시작 시
+  const prevBlinkState = useRef<string>(blink.state);
+
+  // blink.state 변화 감지: CLOSED → OPEN 전환 시 타임스탬프 기록
+  useEffect(() => {
+    if (prevBlinkState.current === "CLOSED" && blink.state === "OPEN") {
+      setEvents((prev) => [...prev, new Date().toISOString()]);
+    }
+    prevBlinkState.current = blink.state;
+  }, [blink.state]);
+
+  // 서버 URL
+  const API_BASE =
+    (import.meta as any).env?.VITE_API_BASE || "http://localhost:8000";
+
+  // 데이터 서버로 전송
+  const sendBlinkData = async () => {
+    const payload = {
+      id: "1",
+      events,
+      startedAt: startedAt.current,
+      endedAt: new Date().toISOString(),
+    };
+    try {
+      const res = await fetch(`${API_BASE}/blink-session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      console.log("Blink data sent:", payload);
+      return true;
+    } catch (err) {
+      console.error("Failed to send blink data:", err);
+      return false;
+    }
+  };
+
+  // 처리 결과 가져오기(JSON: report, daily_blink_per_minute, daily_line_plot_b64)
+  const [processed, setProcessed] = useState<any | null>(null);
+  const fetchProcessed = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/processed-data/1`);
+      const json = await res.json();
+      setProcessed(json);
+      console.log("processed:", json);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // 편의: 전송 후 즉시 분석결과 조회
+  const sendAndFetch = async () => {
+    const ok = await sendBlinkData();
+    if (ok) await fetchProcessed();
+  };
+
+  // 카메라 표시 토글 (스트림은 유지)
   const toggleCamera = () => {
     if (showFace) {
       setShowFace(false);
     } else {
       setShowFace(true);
-      // 카메라가 아직 시작되지 않았다면 시작
-      if (state !== "ready") {
-        startCamera();
-      }
+      if (state !== "ready") startCamera();
     }
   };
 
-  // HUD 표시 문자열 (평균/임계값/최소/최대/최근 갱신)
+  // HUD 표시 문자열
   const hudText = (() => {
     const avg = isFinite(blink.avgRatio) ? blink.avgRatio : 0;
     const min = isFinite(blink.windowMin) ? blink.windowMin : 0;
@@ -68,23 +119,26 @@ export default function App() {
 
     return `평균: ${avg.toFixed(3)} | 임계값: 감음<${blink.CLOSE_T.toFixed(
       2
-    )} / 뜸>${blink.OPEN_T.toFixed(2)} | 최솟값: ${min.toFixed(
+    )} / 뜸>${blink.OPEN_T.toFixed(
+      2
+    )} | 최솟값: ${min.toFixed(3)} / 최댓값: ${max.toFixed(
       3
-    )} / 최댓값: ${max.toFixed(3)} | 최근 갱신: ${lastTs}`;
+    )} | 최근 갱신: ${lastTs}`;
   })();
 
   return (
     <div style={styles.wrap}>
-      {/* 깜빡임 경고 오버레이 - 모든 창 위에 표시 */}
-      <BlinkWarningOverlay
-        isVisible={blinkTimer.progress > 50 || blinkTimer.isWarning} // 50% 이후부터 표시
-        progress={blinkTimer.progress}
-        timeWithoutBlink={blinkTimer.timeWithoutBlink}
-        combo={gameState.combo}
-        score={gameState.score}
-      />
+      {/* === VAD 상태 (임시 표시) === */}
+      {/* <div style={{ fontSize: 12, marginBottom: 8 }}>
+        VAD: {vad.connected ? "● CONNECTED" : "○ DISCONNECTED"}
+        {" | "}inSpeech: {vad.inSpeech ? "YES" : "no"}
+        {" | "}p={vad.lastProb.toFixed(3)}
+        {vad.error && (
+          <span style={{ color: "red" }}>{" | "}{vad.error}</span>
+        )}
+      </div> */}
 
-      {/* 게임 UI - 항상 표시 */}
+      {/* 게임 UI */}
       <GameUI
         hearts={gameState.hearts}
         combo={gameState.combo}
@@ -94,15 +148,15 @@ export default function App() {
         timeRemaining={gameState.timeRemaining}
         countdown={gameState.countdown}
         isPaused={gameState.isPaused}
+        showControlPanel={showControlPanel}
         onResetGame={resetGame}
         onTogglePause={togglePause}
-        showControlPanel={showControlPanel}
         onToggleControlPanel={() => setShowControlPanel(!showControlPanel)}
         onToggleCamera={toggleCamera}
         isCameraOn={showFace}
       />
 
-      {/* 컨트롤 패널 - 토글 가능 (기존 props 유지) */}
+      {/* 설정 패널 */}
       {showControlPanel && (
         <ControlPanel
           state={state}
@@ -125,7 +179,7 @@ export default function App() {
         />
       )}
 
-      {/* 비디오/캐릭터 표시 - 항상 렌더링하되 내부에서 표시 제어 */}
+      {/* 비디오/캐릭터 */}
       <VideoDisplay
         videoRef={videoRef}
         showFace={showFace}
@@ -136,13 +190,59 @@ export default function App() {
         isBlinking={isBlinking}
       />
 
-      {/* 캘리브레이션/HUD 정보: 기존 문구 유지 + 확장 정보 별도 표기 */}
+      {/* HUD */}
       {showHUD && <p style={styles.hud}>{hudText}</p>}
 
-      <p style={styles.tip}>
-        ※ 완전한 깜빡임 사이클(뜸→감음→뜸)을 감지합니다. 눈을 감고만 있으면
-        카운트되지 않아요!
-      </p>
+      {/* 임시 버튼: 전송 + 분석결과 조회 */}
+      <div style={{ marginTop: 12, textAlign: "center" }}>
+        <button onClick={sendAndFetch} style={styles.button}>
+          데이터 전송 & 분석 결과 보기
+        </button>
+      </div>
+
+      {/* 임시 결과 패널 */}
+      {processed && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: 10,
+            right: 10,
+            zIndex: 9999,
+            background: "rgba(0,0,0,0.85)",
+            color: "#fff",
+            padding: 12,
+            maxWidth: 380,
+            borderRadius: 8,
+            fontFamily: "monospace",
+          }}
+        >
+          <div style={{ marginBottom: 8, fontWeight: 700 }}>Processed Result</div>
+
+          {"message" in processed && !("report" in processed) && (
+            <div style={{ marginBottom: 6 }}>{String(processed.message)}</div>
+          )}
+
+          {"report" in processed && (
+            <pre style={{ whiteSpace: "pre-wrap", maxHeight: 220, overflow: "auto" }}>
+              {processed.report}
+            </pre>
+          )}
+
+          {"daily_blink_per_minute" in processed && (
+            <div style={{ marginTop: 6 }}>
+              Daily BPM: {Number(processed.daily_blink_per_minute || 0).toFixed(2)}
+            </div>
+          )}
+
+          {"daily_line_plot_b64" in processed && processed.daily_line_plot_b64 && (
+            <img
+              alt="plot"
+              style={{ width: "100%", marginTop: 8, borderRadius: 6 }}
+              src={`data:image/png;base64,${processed.daily_line_plot_b64}`}
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -158,22 +258,18 @@ const styles: Record<string, React.CSSProperties> = {
     boxSizing: "border-box",
     background: "transparent",
   },
-  title: {
-    margin: "0 0 12px",
-    fontSize: "clamp(16px, 4vw, 18px)",
-    textAlign: "center",
-  },
-  tip: {
-    color: "#666",
-    marginTop: 12,
-    fontSize: "clamp(11px, 2.5vw, 12px)",
-    textAlign: "center",
-  },
   hud: {
     color: "#333",
     marginTop: 8,
     fontSize: "clamp(12px, 2.5vw, 13px)",
     textAlign: "center",
     whiteSpace: "pre-wrap",
+  },
+  button: {
+    padding: "8px 12px",
+    borderRadius: 6,
+    border: "1px solid #ddd",
+    background: "#f6f6f6",
+    cursor: "pointer",
   },
 };

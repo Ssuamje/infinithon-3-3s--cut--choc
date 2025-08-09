@@ -4,7 +4,10 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from io import BytesIO
-from datetime import datetime
+from datetime import datetime, timezone
+import numpy as np
+
+
 
 
 INTERVAL_THRESHOLD = 60  # seconds
@@ -79,9 +82,21 @@ def clean_and_slide_data(data: pd.DataFrame, date: str) -> pd.DataFrame:
     filtered_df = data[pd.to_datetime(data['TIMESTAMP']).dt.strftime("%Y-%m-%d") == date]
     if filtered_df.empty:
         print(f"No data available for {date}")
-        return
+        return pd.Series(dtype=float), pd.Series(dtype=float)
     print(len(filtered_df), "rows gathered this session")
 
+    filtered_df['TIMESTAMP'] = pd.to_datetime(filtered_df['TIMESTAMP'])
+    # 간격(초) 계산: total_seconds() 사용
+    filtered_df['BLINK_INTERVAL'] = filtered_df.TIMESTAMP.diff()
+    filtered_df['BLINK_INTERVAL'] = filtered_df['BLINK_INTERVAL'].dt.seconds
+    # BPM 계산
+    filtered_df['BLINK_PER_MINUTE'] = 60 / filtered_df['BLINK_INTERVAL']
+    # inf/-inf 제거
+    filtered_df.dropna(inplace=True)
+    # 너무 긴 간격 필터 (노이즈 컷)
+    filtered_df = filtered_df[filtered_df['BLINK_INTERVAL'] < INTERVAL_THRESHOLD]
+
+    # 시간별 평균(로그 수가 충분한 시간대만)
     min_filter = (filtered_df.groupby(pd.Grouper(key='TIMESTAMP', freq='h'))['BLINK_PER_MINUTE'].count() >= MIN_LOG_NUM).values
     grouped = filtered_df.groupby(pd.Grouper(key='TIMESTAMP', freq='h'))['BLINK_PER_MINUTE'].mean()
     grouped = grouped[min_filter]
@@ -90,44 +105,63 @@ def clean_and_slide_data(data: pd.DataFrame, date: str) -> pd.DataFrame:
     return slided_data, grouped
 
 def plot_blink_data(cleaned_data: pd.DataFrame, date: str):
-    """
-    Function to plot blink data.
-    :param data: DataFrame containing the blink data.
-    :return: None
-    """
-    # Plot the blink data
+    import numpy as np
+    import pandas as pd
     sns.set_theme(style="whitegrid")
-    plt.figure(figsize=(4, 3))
-    sns.lineplot(data=cleaned_data, marker='o', color='b', linewidth=2.5)
 
-    # Rotate x ticks
-    plt.xticks(rotation=45)
-    lower_y = int(cleaned_data.min()) - 1 if cleaned_data.min() < IDEAL_BLINK_PER_MINUTE else IDEAL_BLINK_PER_MINUTE - 1
-    upper_y = int(cleaned_data.max()) + 1 if cleaned_data.max() > IDEAL_BLINK_PER_MINUTE else IDEAL_BLINK_PER_MINUTE + 1
+    # Series/DF → 숫자 시리즈로 정규화
+    if isinstance(cleaned_data, pd.DataFrame):
+        s = pd.to_numeric(cleaned_data.iloc[:, 0], errors='coerce')
+    else:
+        s = pd.to_numeric(cleaned_data, errors='coerce')
+
+    # inf/-inf 제거
+    s = s.replace([np.inf, -np.inf], np.nan).dropna()
+
+    # 데이터 없으면 플레이스홀더 이미지
+    if s.empty:
+        plt.figure(figsize=(4, 3))
+        plt.title(f"No blink data for {date}")
+        plt.tight_layout()
+        buf = BytesIO()
+        plt.savefig(buf, format='png', bbox_inches='tight')
+        buf.seek(0)
+        img = buf.getvalue()
+        buf.close()
+        plt.close()
+        return img
+
+    plt.figure(figsize=(4, 3))
+    sns.lineplot(x=range(len(s)), y=s.values, marker='o', linewidth=2.5)
+
+    # x축 라벨을 시간대처럼 보이게
+    plt.xticks(ticks=range(len(s)), labels=getattr(cleaned_data, 'index', range(len(s))), rotation=45)
+
+    # y축 안전 계산
+    s_min, s_max = float(np.nanmin(s.values)), float(np.nanmax(s.values))
+    lower_y = int(s_min) - 1 if s_min < IDEAL_BLINK_PER_MINUTE else IDEAL_BLINK_PER_MINUTE - 1
+    upper_y = int(s_max) + 1 if s_max > IDEAL_BLINK_PER_MINUTE else IDEAL_BLINK_PER_MINUTE + 1
+    if lower_y == upper_y:  # 동일하면 보정
+        upper_y = lower_y + 2
     plt.ylim(lower_y, upper_y)
 
-    # Remove x and y labels
     plt.xlabel('')
     plt.ylabel('')
+    plt.axhline(y=IDEAL_BLINK_PER_MINUTE, linestyle='--', alpha=0.5)
 
-    # Draw a horizontal red line at y=100 with low opacity
-    plt.axhline(y=IDEAL_BLINK_PER_MINUTE, color='deepskyblue', linestyle='--', alpha=0.5)
+    # 이모지 위치도 인덱스 길이 기반으로
+    plt.text(len(s)-1, IDEAL_BLINK_PER_MINUTE, '😊', fontsize=14, ha='center', va='bottom')
 
-    # Draw the emoji with the specified font
-    plt.text(cleaned_data.index[-1], IDEAL_BLINK_PER_MINUTE, '😊', fontsize=14, ha='center', va='bottom', color='deepskyblue')
-
-    # Remove grid and axis lines
     sns.despine(left=False, bottom=False)
-
     plt.tight_layout()
-    image_buffer = BytesIO()
-    plt.savefig(image_buffer, format='png', bbox_inches='tight')
-    image_buffer.seek(0)
-    image = image_buffer.getvalue()
-    image_buffer.close()
+    buf = BytesIO()
+    plt.savefig(buf, format='png', bbox_inches='tight')
+    buf.seek(0)
+    img = buf.getvalue()
+    buf.close()
     plt.close()
+    return img
 
-    return image
 
 def generate_report_text(user_info: dict = None, histories: dict = None) -> str:
     """
@@ -191,7 +225,7 @@ def generate_report(raw_data: pd.DataFrame, user_info: dict = None) -> str:
     date = datetime.now().strftime("2025-08-08")
     slided_data, cleaned_data = clean_and_slide_data(raw_data, date)
     image = plot_blink_data(cleaned_data, date)
-    daily_bpm = cleaned_data.mean() if not cleaned_data.empty else 0
+    daily_bpm = (cleaned_data.mean() if cleaned_data is not None and not cleaned_data.empty else 0)
 
     # Generate the report text
     analyzed = analyze_tablet_data(slided_data)
@@ -201,9 +235,8 @@ def generate_report(raw_data: pd.DataFrame, user_info: dict = None) -> str:
     return {
         "report": report_text,
         "daily_blink_per_minute": daily_bpm,
-        "daily_line_plot": image
+        "daily_line_plot": image,
     }
-
 
 # Example usage
 if __name__ == "__main__":

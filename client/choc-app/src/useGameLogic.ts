@@ -8,7 +8,7 @@ export interface GameState {
   isAlive: boolean;
   lastComboTime: number | null;
   gamePhase: "idle" | "warning" | "danger" | "fever";
-  timeRemaining: number;
+  timeRemaining: number; // 게임 시간 (깜빡임으로 연장되는 시간)
   countdown: number | null;
   isPaused: boolean;
 }
@@ -24,7 +24,7 @@ export function useGameLogic(
     isAlive: true,
     lastComboTime: null,
     gamePhase: "idle",
-    timeRemaining: 6000, // 6초
+    timeRemaining: 6000, // 6초 (게임 시간)
     countdown: null,
     isPaused: false,
   });
@@ -76,12 +76,25 @@ export function useGameLogic(
         hearts: newHearts,
         isAlive: newHearts > 0,
         combo: 0,
-        timeRemaining: GAME_DURATION,
         gamePhase: "idle",
         countdown: null,
+        timeRemaining: newHearts > 0 ? GAME_DURATION : 0, // 게임 오버면 시간 0, 아니면 시간 리셋
       };
     });
   };
+
+  // 하트 복구 (사용하지 않음 - 오버레이 제거)
+  const restoreHeart = () => {
+    setGameState((prev) => {
+      const newHearts = Math.min(3, prev.hearts + 1);
+      return {
+        ...prev,
+        hearts: newHearts,
+        isAlive: newHearts > 0,
+      };
+    });
+  };
+
 
   // 게임 타이머 관리
   useEffect(() => {
@@ -90,34 +103,43 @@ export function useGameLogic(
     const updateTimer = () => {
       setGameState((prev) => {
         if (prev.timeRemaining <= 0) {
-          // 시간 초과 - 하트 감소
           return prev;
         }
 
         const newTimeRemaining = Math.max(0, prev.timeRemaining - 100);
         let newPhase = prev.gamePhase;
         let newCountdown = prev.countdown;
+        let newHearts = prev.hearts;
+        let isStillAlive = prev.isAlive;
+
+        // 시간이 0에 도달하면 하트 감소
+        if (prev.timeRemaining > 0 && newTimeRemaining === 0) {
+          newHearts = Math.max(0, prev.hearts - 1);
+          isStillAlive = newHearts > 0;
+        }
 
         // 게임 페이즈 결정
-        if (newTimeRemaining <= DANGER_THRESHOLD) {
+        if (newTimeRemaining <= DANGER_THRESHOLD && newTimeRemaining > 0) {
           newPhase = "danger";
-          // 3-2-1 카운트다운 시작
           if (prev.countdown === null) {
             newCountdown = 3;
           }
-        } else if (newTimeRemaining <= WARNING_THRESHOLD) {
+        } else if (newTimeRemaining <= WARNING_THRESHOLD && newTimeRemaining > 0) {
           newPhase = "warning";
           newCountdown = null;
-        } else {
+        } else if (newTimeRemaining > 0) {
           newPhase = "idle";
           newCountdown = null;
         }
 
         return {
           ...prev,
+          hearts: newHearts,
+          isAlive: isStillAlive,
           timeRemaining: newTimeRemaining,
           gamePhase: newPhase,
           countdown: newCountdown,
+          combo: newTimeRemaining === 0 ? 0 : prev.combo, // 시간 0이면 콤보 리셋
         };
       });
     };
@@ -130,7 +152,12 @@ export function useGameLogic(
 
   // 카운트다운 관리
   useEffect(() => {
-    if (gameState.countdown === null || gameState.countdown <= 0) return;
+    if (
+      gameState.countdown === null ||
+      gameState.countdown <= 0 ||
+      !gameState.isAlive
+    )
+      return;
 
     countdownRef.current = setTimeout(() => {
       setGameState((prev) => ({
@@ -142,11 +169,11 @@ export function useGameLogic(
     return () => {
       if (countdownRef.current) clearTimeout(countdownRef.current);
     };
-  }, [gameState.countdown]);
+  }, [gameState.countdown, gameState.isAlive]);
 
   // 깜빡임 감지 및 콤보 처리
   useEffect(() => {
-    if (gameState.isPaused) return;
+    if (gameState.isPaused || !gameState.isAlive) return;
 
     // 새로운 깜빡임이 감지되었을 때
     if (currentBlinks > prevBlinksRef.current && lastBlinkAt) {
@@ -167,10 +194,8 @@ export function useGameLogic(
             : COMBO_TIMEOUT + 1;
 
           if (timeSinceLastCombo <= COMBO_TIMEOUT) {
-            // 콤보 유지
             newCombo = prev.combo + newBlinks;
           } else {
-            // 새로운 콤보 시작
             newCombo = newBlinks;
           }
 
@@ -178,10 +203,9 @@ export function useGameLogic(
           const comboMultiplier = Math.floor(newCombo / 5) + 1;
           newScore = prev.score + newBlinks * 10 * comboMultiplier;
 
-          // 시간 연장 (깜빡임마다 1초씩)
-          newTimeRemaining = Math.min(GAME_DURATION, prev.timeRemaining + 1000);
+          // 깜빡이면 항상 시간 리셋
+          newTimeRemaining = GAME_DURATION;
 
-          // 게임 페이즈 재계산
           if (newTimeRemaining <= DANGER_THRESHOLD) {
             newPhase = "danger";
             newCountdown = 3;
@@ -222,39 +246,57 @@ export function useGameLogic(
 
       prevBlinksRef.current = currentBlinks;
     }
-  }, [currentBlinks, lastBlinkAt, gameState.isAlive, gameState.isPaused]);
+  }, [
+    currentBlinks,
+    lastBlinkAt,
+    gameState.isAlive,
+    gameState.isPaused,
+  ]);
 
-  // 시간 초과 시 하트 감소
-  useEffect(() => {
-    if (gameState.timeRemaining <= 0 && gameState.isAlive) {
-      loseHeart();
-    }
-  }, [gameState.timeRemaining, gameState.isAlive]);
 
-  // 피버 모드 체크
+  // 게임 페이즈 체크 (피버 모드 + 시간 상태 결합)
   useEffect(() => {
-    if (gameState.combo >= FEVER_THRESHOLD && gameState.gamePhase !== "fever") {
-      setGameState((prev) => ({ ...prev, gamePhase: "fever" }));
-    } else if (
-      gameState.combo < FEVER_THRESHOLD &&
-      gameState.gamePhase === "fever"
-    ) {
-      setGameState((prev) => ({
-        ...prev,
-        gamePhase:
-          prev.timeRemaining <= DANGER_THRESHOLD
-            ? "danger"
-            : prev.timeRemaining <= WARNING_THRESHOLD
-            ? "warning"
-            : "idle",
-      }));
-    }
-  }, [gameState.combo, gameState.gamePhase, gameState.timeRemaining]);
+    setGameState((prev) => {
+      let newPhase = prev.gamePhase;
+      
+      // 피버 모드 체크
+      const isFeverCombo = prev.combo >= FEVER_THRESHOLD;
+      
+      // 시간에 따른 기본 페이즈 결정
+      let timeBasedPhase = "idle";
+      if (prev.timeRemaining <= DANGER_THRESHOLD) {
+        timeBasedPhase = "danger";
+      } else if (prev.timeRemaining <= WARNING_THRESHOLD) {
+        timeBasedPhase = "warning";
+      }
+      
+      // 피버 모드이면서 동시에 시간 상태도 반영
+      if (isFeverCombo) {
+        // 피버 모드 중에도 시간이 위험하면 danger, 경고면 warning
+        if (timeBasedPhase === "danger") {
+          newPhase = "danger";
+        } else if (timeBasedPhase === "warning") {
+          newPhase = "warning";  
+        } else {
+          newPhase = "fever";
+        }
+      } else {
+        newPhase = timeBasedPhase;
+      }
+      
+      if (newPhase !== prev.gamePhase) {
+        return { ...prev, gamePhase: newPhase };
+      }
+      
+      return prev;
+    });
+  }, [gameState.combo, gameState.timeRemaining]);
 
   return {
     gameState,
     loseHeart,
     resetGame,
     togglePause,
+    restoreHeart,
   };
 }

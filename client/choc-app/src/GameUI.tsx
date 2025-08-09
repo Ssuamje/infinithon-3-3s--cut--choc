@@ -1,8 +1,20 @@
 // src/GameUI.tsx
-import React from "react";
+import React, { useEffect } from "react";
 import styled, { keyframes, css } from "styled-components";
 
+// blinkAPI 타입 정의
+declare global {
+  interface Window {
+    blinkAPI: {
+      notifyGamePhaseChanged: (gamePhase: string) => void;
+      notifyCountdownStarted: (countdown: number) => void;
+      notifyCountdownFinished: () => void;
+    };
+  }
+}
+
 interface GameUIProps {
+  onSendBlinkData: () => void;
   hearts: number;
   combo: number;
   score: number;
@@ -33,9 +45,28 @@ export const GameUI: React.FC<GameUIProps> = ({
   onTogglePause,
   onToggleControlPanel,
   onToggleCamera,
+  onSendBlinkData,
   isCameraOn,
 }) => {
   const timePercent = (timeRemaining / 6000) * 100;
+
+  // 게임 상태 변경 시 메인 프로세스에 알림
+  useEffect(() => {
+    if (window.blinkAPI) {
+      window.blinkAPI.notifyGamePhaseChanged(gamePhase);
+    }
+  }, [gamePhase]);
+
+  // 카운트다운 시작/종료 시 메인 프로세스에 알림
+  useEffect(() => {
+    if (window.blinkAPI) {
+      if (countdown !== null && countdown > 0) {
+        window.blinkAPI.notifyCountdownStarted(countdown);
+      } else if (countdown === null) {
+        window.blinkAPI.notifyCountdownFinished();
+      }
+    }
+  }, [countdown]);
 
   return (
     <Container>
@@ -62,7 +93,6 @@ export const GameUI: React.FC<GameUIProps> = ({
         {/* 중앙: 상태 점 (피버 모드가 아닐 때만 배지 표시) */}
         <Section $align="center">
           <StatusDot $gamePhase={gamePhase} />
-          {gamePhase === "fever" && <FeverBadge>🔥 FEVER MODE</FeverBadge>}
         </Section>
 
         {/* 오른쪽: 점수와 버튼들 */}
@@ -94,7 +124,7 @@ export const GameUI: React.FC<GameUIProps> = ({
               title={showControlPanel ? "설정 패널 숨기기" : "설정 패널 보기"}
             >
               ⚙️
-            </Button>
+          </Button>
           </ButtonContainer>
         </Section>
       </StatusBar>
@@ -112,21 +142,6 @@ export const GameUI: React.FC<GameUIProps> = ({
           </Countdown>
         )}
       </TimerSection>
-
-      {/* 피버 모드 전용 고정 UI */}
-      {gamePhase === "fever" && (
-        <FeverOverlay>
-          <FeverContainer>
-            <FeverParticles />
-            <FeverTitle>🔥 FEVER MODE 🔥</FeverTitle>
-            <FeverSubtitle>모든 점수가 5배로!</FeverSubtitle>
-            <FeverComboDisplay>
-              <FeverComboNumber>{combo}</FeverComboNumber>
-              <FeverMultiplier>COMBO × 5</FeverMultiplier>
-            </FeverComboDisplay>
-          </FeverContainer>
-        </FeverOverlay>
-      )}
 
       {/* 게임 오버 화면 */}
       {!isAlive && (
@@ -160,10 +175,12 @@ const gentlePulse = keyframes`
 
 const feverGlow = keyframes`
   0%, 100% {
-    box-shadow: 0 0 30px rgba(255, 107, 53, 0.3), inset 0 0 30px rgba(255, 107, 53, 0.1);
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
+    transform: scale(1);
   }
   50% {
-    box-shadow: 0 0 50px rgba(255, 107, 53, 0.5), inset 0 0 40px rgba(255, 107, 53, 0.2);
+    box-shadow: 0 0 30px rgba(139, 92, 246, 0.8);
+    transform: scale(1.1);
   }
 `;
 
@@ -180,18 +197,24 @@ const fadeInUp = keyframes`
 
 // 스타일 컴포넌트
 const Container = styled.div`
-  position: relative; // fixed에서 relative로 변경
+  position: relative;
   width: 100%;
   pointer-events: none;
   z-index: 1000;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  margin-bottom: 20px; // 아래 여백 추가
+  margin-bottom: 20px;
+
+  /* 전체 영역을 드래그 가능하게 설정 */
+  -webkit-app-region: drag;
+  user-select: none;
+  /* overflow: hidden; */
 `;
 
+// StatusBar를 원래대로 되돌리고 피버 모드만 특별한 테두리 효과 추가
 const StatusBar = styled.div<{ $gamePhase: string }>`
-  position: relative; // absolute에서 relative로 변경
-  width: clamp(300px, 85vw, 600px);
-  margin: 0 auto; // 중앙 정렬
+  position: relative;
+  width: clamp(300px, 80vw, 600px);
+  margin: 0 auto;
   padding: clamp(12px, 2.5vw, 16px) clamp(16px, 4vw, 24px);
   border-radius: clamp(16px, 4vw, 24px);
   backdrop-filter: blur(20px);
@@ -203,6 +226,10 @@ const StatusBar = styled.div<{ $gamePhase: string }>`
   align-items: center;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
   animation: ${fadeInUp} 0.6s ease-out;
+
+  /* 버튼 영역은 드래그 방지 */
+  -webkit-app-region: drag;
+  user-select: none; /* 텍스트 드래그 방지 */
 
   ${({ $gamePhase }) =>
     $gamePhase === "idle" &&
@@ -228,10 +255,12 @@ const StatusBar = styled.div<{ $gamePhase: string }>`
   ${({ $gamePhase }) =>
     $gamePhase === "fever" &&
     css`
-      background: rgba(249, 115, 22, 0.15);
-      border-color: rgba(249, 115, 22, 0.4);
-      animation: ${gentlePulse} 3s ease-in-out infinite,
-        ${fadeInUp} 0.6s ease-out;
+      background: rgba(139, 92, 246, 0.15);
+      border-color: rgba(139, 92, 246, 0.4);
+      border-width: 2px; /* 테두리 두께 증가 */
+      box-shadow: 0 0 20px rgba(139, 92, 246, 0.6);
+      animation: ${gentlePulse} 0.5s ease-in-out infinite,
+        ${fadeInUp} 0.5s ease-out;
     `}
 `;
 
@@ -258,6 +287,7 @@ const Section = styled.div<{ $align?: string }>`
 const LifeContainer = styled.div`
   display: flex;
   gap: clamp(4px, 1vw, 6px);
+  -webkit-app-region: no-drag;
 `;
 
 const Heart = styled.span<{ $active: boolean }>`
@@ -267,10 +297,13 @@ const Heart = styled.span<{ $active: boolean }>`
 
   opacity: ${({ $active }) => ($active ? 1 : 0.3)};
   transform: ${({ $active }) => ($active ? "scale(1)" : "scale(0.9)")};
+  -webkit-app-region: no-drag;
+  user-select: none; /* 텍스트 선택 방지 */
 `;
 
 const ComboContainer = styled.div`
   text-align: center;
+  -webkit-app-region: no-drag;
 `;
 
 const ComboNumber = styled.div<{ $gamePhase: string }>`
@@ -279,6 +312,8 @@ const ComboNumber = styled.div<{ $gamePhase: string }>`
   color: #f97316;
   line-height: 1;
   text-shadow: 0 2px 8px rgba(249, 115, 22, 0.3);
+  -webkit-app-region: no-drag;
+  user-select: none; /* 텍스트 선택 방지 */
 
   ${({ $gamePhase }) =>
     $gamePhase === "warning" &&
@@ -294,6 +329,8 @@ const ComboLabel = styled.div`
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  -webkit-app-region: no-drag;
+  user-select: none; /* 텍스트 선택 방지 */
 `;
 
 const StatusDot = styled.div<{ $gamePhase: string }>`
@@ -303,17 +340,20 @@ const StatusDot = styled.div<{ $gamePhase: string }>`
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   transition: all 0.3s ease;
   border: 2px solid rgba(255, 255, 255, 0.3);
+  -webkit-app-region: no-drag;
 
   ${({ $gamePhase }) =>
     $gamePhase === "idle" &&
     css`
       background: linear-gradient(135deg, #10b981, #059669);
+      animation: ${gentlePulse} 3s ease-in-out infinite;
     `}
 
   ${({ $gamePhase }) =>
     $gamePhase === "warning" &&
     css`
       background: linear-gradient(135deg, #f59e0b, #d97706);
+      animation: ${comboPulse} 1.5s ease-in-out infinite;
     `}
 
   ${({ $gamePhase }) =>
@@ -326,19 +366,10 @@ const StatusDot = styled.div<{ $gamePhase: string }>`
   ${({ $gamePhase }) =>
     $gamePhase === "fever" &&
     css`
-      background: linear-gradient(135deg, #f97316, #ea580c);
+      background: linear-gradient(135deg, #8b5cf6, #6366f1);
+      animation: ${feverGlow} 0.5s ease-in-out infinite;
+      box-shadow: 0 0 2px rgba(139, 92, 246, 0.6);
     `}
-`;
-
-const FeverBadge = styled.div`
-  background: linear-gradient(135deg, #f97316, #ea580c);
-  color: white;
-  padding: clamp(6px, 1.5vw, 8px) clamp(10px, 2.5vw, 14px);
-  border-radius: clamp(12px, 3vw, 16px);
-  font-size: clamp(10px, 2.2vw, 12px);
-  font-weight: 600;
-  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.4);
-  animation: ${fadeInUp} 0.3s ease-out;
 `;
 
 const ScoreContainer = styled.div`
@@ -346,14 +377,17 @@ const ScoreContainer = styled.div`
   display: flex;
   flex-direction: column;
   align-items: flex-end;
+  -webkit-app-region: no-drag;
 `;
 
 const Score = styled.span`
   font-size: clamp(16px, 4vw, 20px);
   font-weight: 700;
-  color: #1f2937;
+  color: #999;
   line-height: 1;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  -webkit-app-region: no-drag;
+  user-select: none; /* 텍스트 선택 방지 */
 `;
 
 const ScoreLabel = styled.span`
@@ -363,11 +397,14 @@ const ScoreLabel = styled.span`
   margin-top: 2px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  -webkit-app-region: no-drag;
+  user-select: none; /* 텍스트 선택 방지 */
 `;
 
 const ButtonContainer = styled.div`
   display: flex;
   gap: clamp(6px, 1.5vw, 8px);
+  -webkit-app-region: no-drag;
 `;
 
 const Button = styled.button<{ $variant?: string; $active?: boolean }>`
@@ -397,23 +434,8 @@ const Button = styled.button<{ $variant?: string; $active?: boolean }>`
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
 
-  ${({ $variant, $active }) =>
-    $variant === "camera" &&
-    css`
-      background: ${$active
-        ? "linear-gradient(135deg, #ef4444, #dc2626)"
-        : "linear-gradient(135deg, #10b981, #059669)"};
-      border-color: ${$active
-        ? "rgba(239, 68, 68, 0.6)"
-        : "rgba(16, 185, 129, 0.6)"};
-      color: white;
-
-      &:hover {
-        background: ${$active
-          ? "linear-gradient(135deg, #dc2626, #b91c1c)"
-          : "linear-gradient(135deg, #059669, #047857)"};
-      }
-    `}
+  -webkit-app-region: no-drag;
+  user-select: none;
 `;
 
 const TimerSection = styled.div`
@@ -421,6 +443,10 @@ const TimerSection = styled.div`
   margin: 0 auto; // 중앙 정렬
   pointer-events: none;
   margin-top: 16px; // 위 여백 추가
+
+  /* 드래그 가능 */
+  -webkit-app-region: drag;
+  user-select: none; /* 텍스트 드래그 방지 */
 `;
 
 const TimerBar = styled.div`
@@ -431,6 +457,7 @@ const TimerBar = styled.div`
   overflow: hidden;
   margin-bottom: clamp(8px, 2vw, 12px);
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+  -webkit-app-region: no-drag;
 `;
 
 const TimerProgress = styled.div<{ $width: number; $gamePhase: string }>`
@@ -439,6 +466,7 @@ const TimerProgress = styled.div<{ $width: number; $gamePhase: string }>`
   transition: width 0.1s ease;
   border-radius: clamp(2px, 0.5vw, 3px);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  -webkit-app-region: no-drag;
 
   ${({ $gamePhase }) =>
     $gamePhase === "idle" &&
@@ -461,13 +489,15 @@ const TimerProgress = styled.div<{ $width: number; $gamePhase: string }>`
   ${({ $gamePhase }) =>
     $gamePhase === "fever" &&
     css`
-      background: linear-gradient(90deg, #f97316, #ea580c);
+      background: linear-gradient(90deg, #8b5cf6, #6366f1);
     `}
 `;
 
 const Countdown = styled.div`
   text-align: center;
   pointer-events: none;
+  -webkit-app-region: no-drag;
+  user-select: none; /* 텍스트 드래그 방지 */
 `;
 
 const CountdownText = styled.span`
@@ -477,6 +507,8 @@ const CountdownText = styled.span`
   text-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
   display: block;
   animation: ${comboPulse} 1s infinite;
+  -webkit-app-region: no-drag;
+  user-select: none; /* 텍스트 선택 방지 */
 `;
 
 const CountdownMessage = styled.div`
@@ -485,6 +517,8 @@ const CountdownMessage = styled.div`
   font-weight: 500;
   margin-top: 4px;
   opacity: 0.8;
+  -webkit-app-region: no-drag;
+  user-select: none; /* 텍스트 선택 방지 */
 `;
 
 const GameOverlay = styled.div`
@@ -500,29 +534,32 @@ const GameOverlay = styled.div`
   z-index: 2000;
   pointer-events: auto;
   backdrop-filter: blur(8px);
+  -webkit-app-region: no-drag;
 `;
 
 const GameOverContent = styled.div`
-  background: white;
-  padding: clamp(24px, 6vw, 40px);
-  border-radius: clamp(16px, 4vw, 24px);
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  padding: clamp(8px, 2vw, 12px); /* 더 작게 */
+  border-radius: clamp(8px, 2vw, 12px); /* 더 작게 */
   text-align: center;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
   animation: ${fadeInUp} 0.4s ease-out;
-  max-width: 400px;
-  width: 90vw;
+  max-width: 200px; /* 더 작게 */
+  width: 60vw; /* 더 작게 */
+  border: 1px solid rgba(255, 255, 255, 0.3);
 `;
 
 const GameOverTitle = styled.h2`
-  margin: 0 0 16px;
+  margin: 0 0 6px; /* 더 작게 */
   color: #ef4444;
-  font-size: clamp(20px, 5vw, 28px);
+  font-size: clamp(12px, 3vw, 16px); /* 더 작게 */
   font-weight: 700;
 `;
 
 const GameOverScore = styled.p`
-  margin: 0 0 24px;
-  font-size: clamp(14px, 3.5vw, 18px);
+  margin: 0 0 8px; /* 더 작게 */
+  font-size: clamp(10px, 2.5vw, 12px); /* 더 작게 */
   color: #6b7280;
   font-weight: 500;
 `;
@@ -531,124 +568,21 @@ const RestartButton = styled.button`
   background: linear-gradient(135deg, #10b981, #059669);
   color: white;
   border: none;
-  padding: clamp(10px, 2.5vw, 14px) clamp(20px, 5vw, 28px);
-  border-radius: clamp(8px, 2vw, 12px);
-  font-size: clamp(14px, 3.5vw, 16px);
+  padding: clamp(6px, 1.5vw, 8px) clamp(12px, 3vw, 16px); /* 더 작게 */
+  border-radius: clamp(4px, 1vw, 6px); /* 더 작게 */
+  font-size: clamp(10px, 2.5vw, 12px); /* 더 작게 */
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3); /* 더 작게 */
 
   &:hover {
     background: linear-gradient(135deg, #059669, #047857);
     transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+    box-shadow: 0 3px 8px rgba(16, 185, 129, 0.4);
   }
 
   &:active {
     transform: translateY(0);
-  }
-`;
-
-// 피버 모드 전용 고정 UI
-const FeverOverlay = styled.div`
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  pointer-events: none;
-  z-index: 1500;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-`;
-
-const FeverContainer = styled.div`
-  position: relative;
-  background: linear-gradient(
-    135deg,
-    rgba(249, 115, 22, 0.95),
-    rgba(234, 88, 12, 0.85)
-  );
-  backdrop-filter: blur(30px);
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-radius: clamp(12px, 3vw, 16px);
-  padding: clamp(8px, 2vw, 12px) clamp(12px, 3vw, 16px);
-  text-align: center;
-  box-shadow: 0 8px 24px rgba(249, 115, 22, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
-  animation: ${feverGlow} 2s ease-in-out infinite;
-  max-width: 200px;
-  width: 60vw;
-`;
-
-const FeverTitle = styled.h1`
-  font-size: clamp(12px, 3vw, 14px);
-  font-weight: 700;
-  color: white;
-  margin: 0 0 4px;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-  letter-spacing: 0.05em;
-`;
-
-const FeverSubtitle = styled.p`
-  font-size: clamp(9px, 2vw, 11px);
-  color: rgba(255, 255, 255, 0.9);
-  margin: 0 0 8px;
-  font-weight: 500;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-`;
-
-const FeverComboDisplay = styled.div`
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: clamp(6px, 1.5vw, 8px);
-  padding: clamp(6px, 1.5vw, 8px);
-  margin-bottom: 0;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-`;
-
-const FeverComboNumber = styled.div`
-  font-size: clamp(16px, 4vw, 20px);
-  font-weight: 800;
-  color: white;
-  line-height: 1;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-  animation: ${gentlePulse} 2s ease-in-out infinite;
-`;
-
-const FeverMultiplier = styled.div`
-  font-size: clamp(8px, 2vw, 10px);
-  color: rgba(255, 255, 255, 0.9);
-  font-weight: 600;
-  margin-top: 2px;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-`;
-
-const FeverParticles = styled.div`
-  position: absolute;
-  top: -5px;
-  left: -5px;
-  right: -5px;
-  bottom: -5px;
-  pointer-events: none;
-  overflow: hidden;
-  border-radius: clamp(12px, 3vw, 16px);
-
-  &::before {
-    content: "🔥";
-    position: absolute;
-    font-size: 12px;
-    animation: ${gentlePulse} 1.5s ease-in-out infinite;
-    top: 5%;
-    left: 5%;
-  }
-
-  &::after {
-    content: "✨";
-    position: absolute;
-    font-size: 10px;
-    animation: ${gentlePulse} 2s ease-in-out infinite reverse;
-    bottom: 5%;
-    right: 5%;
   }
 `;

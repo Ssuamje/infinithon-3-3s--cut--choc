@@ -22,20 +22,22 @@ async function createWindow() {
         }
     }
     win = new BrowserWindow({
-        width: 480, // 360에서 640으로 조정 (UI 크기에 맞춤)
-        height: 800, // 460에서 700으로 조정 (UI 높이에 맞춤)
-        show: false, // 트레이로 토글
-        frame: false, // ✅ 상단바 제거 (프레임리스)
-        transparent: false, // 배경 투명은 필요 시 true로
-        opacity: 0.95, // 초기 투명도
+        width: 480,
+        height: 116,
+        show: true,
+        frame: false, // true에서 false로 변경 (상단바 제거)
+        transparent: true, // false에서 true로 변경 (투명 배경)
+        opacity: 1,
         resizable: true,
         movable: true,
-        alwaysOnTop: true, // 기본 항상 위 (메뉴로 토글 가능)
+        alwaysOnTop: true,
         skipTaskbar: true,
         fullscreenable: false,
         minimizable: false,
         maximizable: false,
-        // titleBarStyle은 frame:false이면 의미 없으므로 제거
+        // 드래그 개선을 위한 추가 설정
+        hasShadow: false,
+        thickFrame: false,
         webPreferences: {
             preload: path.join(__dirname, "preload.js"),
             contextIsolation: true,
