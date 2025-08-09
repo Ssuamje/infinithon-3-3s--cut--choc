@@ -1,143 +1,195 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+// src/App.tsx
+import { useEffect, useRef, useState } from "react";
+import { useBlinkDetector } from "./useBlinkDetector";
+import { useGameLogic } from "./useGameLogic";
+import { GameUI } from "./GameUI";
 
 type CamState = "idle" | "loading" | "ready" | "error";
 
 export default function App() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const startedRef = useRef(false);
 
   const [state, setState] = useState<CamState>("idle");
-  const [error, setError] = useState<string | null>(null);
-  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
-  const [deviceId, setDeviceId] = useState<string | undefined>(undefined);
+  const [ready, setReady] = useState(false);
   const [mirrored, setMirrored] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  /** 카메라 중지 & 리소스 정리 */
-  const stopCamera = useCallback(() => {
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
+  const attachAndPlay = async (
+    video: HTMLVideoElement,
+    stream: MediaStream
+  ) => {
+    // 1) 이전 연결 해제
+    if (video.srcObject && video.srcObject !== stream) {
+      (video.srcObject as MediaStream)?.getTracks().forEach((t) => t.stop());
+      video.srcObject = null;
     }
-    setState("idle");
-  }, []);
 
-  /** 카메라 시작 */
-  const startCamera = useCallback(async (id?: string) => {
-    try {
-      setState("loading");
-      setError(null);
+    // 2) 새 스트림 연결
+    video.srcObject = stream;
 
-      // 권장 해상도는 추후 분석용으로 조정 가능 (예: 640x480, 1280x720 등)
-      const constraints: MediaStreamConstraints = {
-        video: {
-          deviceId: id ? { exact: id } : undefined,
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          facingMode: "user",
-        },
-        audio: false,
+    // 3) loadedmetadata 이후 play
+    await new Promise<void>((res) => {
+      if (video.readyState >= 1) return res(); // HAVE_METADATA
+      const onLoaded = () => {
+        video.removeEventListener("loadedmetadata", onLoaded);
+        res();
       };
+      video.addEventListener("loadedmetadata", onLoaded);
+    });
 
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      streamRef.current = stream;
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
-      setState("ready");
-    } catch (e: any) {
-      setError(e?.message ?? "카메라 접근 오류");
-      setState("error");
-    }
-  }, []);
-
-  /** 장치 목록 갱신 */
-  const refreshDevices = useCallback(async () => {
     try {
-      const list = await navigator.mediaDevices.enumerateDevices();
-      const cams = list.filter((d) => d.kind === "videoinput");
-      setDevices(cams);
-      // 첫 실행 시 기본 장치 선택
-      if (!deviceId && cams[0]?.deviceId) {
-        setDeviceId(cams[0].deviceId);
-      }
-    } catch (e: any) {
-      setError(e?.message ?? "카메라 장치 탐색 오류");
+      await video.play(); // autoplay 정책 대비: muted + playsInline 필수
+    } catch (e) {
+      console.debug("video.play() rejected:", e);
     }
-  }, [deviceId]);
+  };
 
-  /** 최초 마운트: 권한 요청 & 장치 목록 & 기본 카메라 ON */
+  const startCamera = async (deviceId?: string) => {
+    setState("loading");
+    setError(null);
+
+    const constraints: MediaStreamConstraints = {
+      video: {
+        deviceId: deviceId ? { exact: deviceId } : undefined,
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        facingMode: "user",
+      },
+      audio: false,
+    };
+
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    streamRef.current = stream;
+
+    if (videoRef.current) {
+      await attachAndPlay(videoRef.current, stream);
+    }
+
+    setReady(true);
+    setState("ready");
+  };
+
+  const stopCamera = () => {
+    const v = videoRef.current;
+    const s = streamRef.current;
+
+    if (s) s.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+
+    if (v) v.srcObject = null;
+
+    setReady(false);
+    setState("idle");
+  };
+
+  // 1) 카메라 켜기 (StrictMode 이중 실행 가드)
   useEffect(() => {
-    let mounted = true;
+    if (startedRef.current) return;
+    startedRef.current = true;
 
     (async () => {
-      await refreshDevices();
-      // 일부 브라우저/환경에선 enumerateDevices 전에 getUserMedia 한 번 호출해야 라벨 보임
-      if (mounted) {
-        await startCamera(deviceId);
+      try {
+        await startCamera();
+      } catch (e: unknown) {
+        setError((e as Error)?.message ?? "camera error");
+        setState("error");
       }
     })();
 
     return () => {
-      mounted = false;
       stopCamera();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** 디바이스 변경 시 재시작 */
-  useEffect(() => {
-    if (!deviceId) return;
-    // 이미 켜져 있으면 재시작
-    if (state === "ready" || state === "loading" || state === "error") {
-      (async () => {
-        stopCamera();
-        await startCamera(deviceId);
-      })();
-    }
-  }, [deviceId, startCamera, stopCamera, state]);
+  // 2) 깜빡임 감지
+  const blink = useBlinkDetector(videoRef.current);
+
+  // 3) 게임 로직
+  const { gameState, loseHeart, resetGame, revivalProgress, revivalRequired } =
+    useGameLogic(blink.blinks, blink.lastBlinkAt);
 
   return (
     <div style={styles.wrap}>
-      <h1 style={styles.title}>Blink Preview (Electron + React)</h1>
+      <h1 style={styles.title}>🍫 초콜릿 깜빡임 게임</h1>
 
-      <div style={styles.controls}>
-        <label style={styles.label}>
-          Camera:
-          <select
-            value={deviceId}
-            onChange={(e) => setDeviceId(e.target.value)}
-            style={styles.select}
+      {/* 게임 UI */}
+      <GameUI
+        hearts={gameState.hearts}
+        combo={gameState.combo}
+        score={gameState.score}
+        isAlive={gameState.isAlive}
+        revivalProgress={revivalProgress}
+        revivalRequired={revivalRequired}
+        onLoseHeart={loseHeart}
+        onResetGame={resetGame}
+      />
+
+      <div style={styles.panel}>
+        <div>
+          Cam:{" "}
+          <b
+            style={{
+              color:
+                state === "ready"
+                  ? "#21c074"
+                  : state === "error"
+                  ? "#ff5050"
+                  : "#999",
+            }}
           >
-            {devices.map((d, idx) => (
-              <option key={d.deviceId || idx} value={d.deviceId}>
-                {d.label || `Camera ${idx + 1}`}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <button
-          onClick={() => startCamera(deviceId)}
-          disabled={state === "loading"}
-          style={styles.button}
-        >
-          시작
-        </button>
-        <button onClick={stopCamera} style={styles.buttonSecondary}>
-          중지
-        </button>
-
-        <label style={styles.checkboxLabel}>
+            {state}
+          </b>
+        </div>
+        <div>
+          State:{" "}
+          <b
+            style={{ 
+              color: 
+                blink.state === "CLOSED" || blink.state === "CLOSING" ? "#ff5050" : 
+                blink.state === "OPENING" ? "#f7b731" :
+                blink.state === "OPEN" ? "#21c074" : "#999"
+            }}
+          >
+            {blink.state === "UNKNOWN" ? "대기중" :
+             blink.state === "OPEN" ? "눈뜸" :
+             blink.state === "CLOSING" ? "감는중" :
+             blink.state === "CLOSED" ? "눈감음" :
+             blink.state === "OPENING" ? "뜨는중" : blink.state}
+          </b>
+        </div>
+        <div>
+          Blinks: <b>{blink.blinks}</b>
+        </div>
+        <div>
+          Ratio L/R: {blink.ratioL.toFixed(3)} / {blink.ratioR.toFixed(3)}
+        </div>
+        <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>
+          평균: {((blink.ratioL + blink.ratioR) / 2).toFixed(3)} 
+          | 임계값: 감음&lt;0.12 / 뜸&gt;0.15
+        </div>
+        <div style={{ fontSize: 12, color: '#666' }}>
+          완전한 깜빡임 사이클 감지 (뜸→감음→뜸)
+        </div>
+        <label style={styles.checkbox}>
           <input
             type="checkbox"
             checked={mirrored}
             onChange={(e) => setMirrored(e.target.checked)}
           />
-          미러(거울) 모드
+          미러 모드
         </label>
+        {state === "ready" ? (
+          <button style={styles.buttonSecondary} onClick={stopCamera}>
+            중지
+          </button>
+        ) : (
+          <button style={styles.button} onClick={() => startCamera()}>
+            시작
+          </button>
+        )}
       </div>
 
       <div style={styles.videoBox}>
@@ -151,58 +203,35 @@ export default function App() {
           muted
           autoPlay
         />
-        {state !== "ready" && (
-          <div style={styles.overlay}>
-            {state === "loading" && "카메라 준비 중…"}
-            {state === "idle" && "대기 중"}
-            {state === "error" && `에러: ${error ?? "알 수 없음"}`}
-          </div>
-        )}
+        {!ready && !error && <div style={styles.overlay}>카메라 준비 중…</div>}
+        {error && <div style={styles.overlay}>에러: {error}</div>}
       </div>
 
       <p style={styles.tip}>
-        ✅ 권한 거부 시 macOS “시스템 설정 &gt; 개인정보 보호 및 보안 &gt;
-        카메라”에서 앱에 권한을 허용해 주세요.
+        ※ 완전한 깜빡임 사이클(뜸→감는중→감음→뜨는중→뜸)을 감지합니다. 
+        눈을 감고만 있으면 카운트되지 않아요!
       </p>
     </div>
   );
 }
 
-/** 인라인 스타일 간단 정리 (임시) */
 const styles: Record<string, React.CSSProperties> = {
   wrap: {
     padding: 16,
     fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
   },
   title: { margin: "0 0 12px" },
-  controls: {
+  panel: {
     display: "flex",
+    gap: 16,
     alignItems: "center",
-    gap: 8,
-    marginBottom: 12,
     flexWrap: "wrap",
+    marginBottom: 12,
+    background: "#5e5e5e",
+    padding: 10,
+    borderRadius: 10,
   },
-  label: { display: "flex", alignItems: "center", gap: 6 },
-  select: { padding: "6px 8px", borderRadius: 8, border: "1px solid #ccc" },
-  button: {
-    padding: "8px 12px",
-    borderRadius: 8,
-    border: "1px solid #222",
-    background: "#111",
-    color: "#fff",
-  },
-  buttonSecondary: {
-    padding: "8px 12px",
-    borderRadius: 8,
-    border: "1px solid #bbb",
-    background: "#eee",
-  },
-  checkboxLabel: {
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
-    marginLeft: 8,
-  },
+  checkbox: { display: "flex", alignItems: "center", gap: 6 },
   videoBox: {
     position: "relative",
     width: 800,
@@ -225,137 +254,3 @@ const styles: Record<string, React.CSSProperties> = {
   },
   tip: { color: "#666", marginTop: 10 },
 };
-
-// src/App.tsx
-// import { useEffect, useRef, useState } from "react";
-// import { useBlinkDetector } from "./useBlinkDetector";
-
-// export default function App() {
-//   const videoRef = useRef<HTMLVideoElement | null>(null);
-//   const [ready, setReady] = useState(false);
-//   const [mirrored, setMirrored] = useState(true);
-//   const [error, setError] = useState<string | null>(null);
-
-//   // 1) 카메라 켜기
-//   useEffect(() => {
-//     (async () => {
-//       try {
-//         const stream = await navigator.mediaDevices.getUserMedia({
-//           video: {
-//             width: { ideal: 1280 },
-//             height: { ideal: 720 },
-//             facingMode: "user",
-//           },
-//           audio: false,
-//         });
-//         if (videoRef.current) {
-//           videoRef.current.srcObject = stream;
-//           await videoRef.current.play();
-//           setReady(true);
-//         }
-//       } catch (e: any) {
-//         setError(e?.message ?? "camera error");
-//       }
-//     })();
-
-//     return () => {
-//       const tracks =
-//         (videoRef.current?.srcObject as MediaStream | null)?.getTracks() ?? [];
-//       tracks.forEach((t) => t.stop());
-//     };
-//   }, []);
-
-//   // 2) 깜빡임 감지
-//   const blink = useBlinkDetector(videoRef.current);
-
-//   return (
-//     <div style={styles.wrap}>
-//       <h1 style={styles.title}>Blink Detector (MediaPipe)</h1>
-
-//       <div style={styles.panel}>
-//         <div>
-//           State:{" "}
-//           <b
-//             style={{ color: blink.state === "CLOSED" ? "#ff5050" : "#21c074" }}
-//           >
-//             {blink.state}
-//           </b>
-//         </div>
-//         <div>
-//           Blinks: <b>{blink.blinks}</b>
-//         </div>
-//         <div>
-//           Ratio L/R: {blink.ratioL.toFixed(3)} / {blink.ratioR.toFixed(3)}
-//         </div>
-//         <label style={styles.checkbox}>
-//           <input
-//             type="checkbox"
-//             checked={mirrored}
-//             onChange={(e) => setMirrored(e.target.checked)}
-//           />
-//           미러 모드
-//         </label>
-//       </div>
-
-//       <div style={styles.videoBox}>
-//         <video
-//           ref={videoRef}
-//           style={{
-//             ...styles.video,
-//             transform: mirrored ? "scaleX(-1)" : "none",
-//           }}
-//           playsInline
-//           muted
-//           autoPlay
-//         />
-//         {!ready && !error && <div style={styles.overlay}>카메라 준비 중…</div>}
-//         {error && <div style={styles.overlay}>에러: {error}</div>}
-//       </div>
-
-//       <p style={styles.tip}>
-//         ※ EAR 임계값은 조명/카메라에 따라 달라질 수 있어요. CLOSE_T/OPEN_T를
-//         미세 조정하세요.
-//       </p>
-//     </div>
-//   );
-// }
-
-// const styles: Record<string, React.CSSProperties> = {
-//   wrap: {
-//     padding: 16,
-//     fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
-//   },
-//   title: { margin: "0 0 12px" },
-//   panel: {
-//     display: "flex",
-//     gap: 16,
-//     alignItems: "center",
-//     flexWrap: "wrap",
-//     marginBottom: 12,
-//     background: "#f6f6f8",
-//     padding: 10,
-//     borderRadius: 10,
-//   },
-//   checkbox: { display: "flex", alignItems: "center", gap: 6 },
-//   videoBox: {
-//     position: "relative",
-//     width: 800,
-//     maxWidth: "100%",
-//     aspectRatio: "16/9",
-//     background: "#000",
-//     borderRadius: 12,
-//     overflow: "hidden",
-//   },
-//   video: { width: "100%", height: "100%", objectFit: "cover" },
-//   overlay: {
-//     position: "absolute",
-//     inset: 0,
-//     display: "flex",
-//     alignItems: "center",
-//     justifyContent: "center",
-//     color: "#fff",
-//     background: "rgba(0,0,0,0.35)",
-//     fontSize: 18,
-//   },
-//   tip: { color: "#666", marginTop: 10 },
-// };

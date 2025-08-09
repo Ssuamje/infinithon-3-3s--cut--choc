@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { FaceMesh } from "@mediapipe/face_mesh";
 import { Camera } from "@mediapipe/camera_utils";
 
-type BlinkState = "OPEN" | "CLOSED";
+type BlinkState = "UNKNOWN" | "OPEN" | "CLOSING" | "CLOSED" | "OPENING";
 
 export interface BlinkResult {
   ratioL: number;
@@ -14,7 +14,7 @@ export interface BlinkResult {
 }
 
 /** 유클리드 거리 */
-const dist = (a: any, b: any) => {
+const dist = (a: {x: number, y: number}, b: {x: number, y: number}) => {
   const dx = a.x - b.x,
     dy = a.y - b.y;
   return Math.hypot(dx, dy);
@@ -30,14 +30,14 @@ const LEFT = { L: 33, R: 133, T: 159, B: 145 };
 const RIGHT = { L: 362, R: 263, T: 386, B: 374 };
 
 /** EAR 유사치: 세로/가로 (값이 작아지면 감김) */
-function eyeOpenRatio(lm: any[], eye: typeof LEFT) {
+function eyeOpenRatio(lm: {x: number, y: number}[], eye: typeof LEFT) {
   const w = dist(lm[eye.L], lm[eye.R]) + 1e-6;
   const h = dist(lm[eye.T], lm[eye.B]);
   return h / w;
 }
 
-/** 이동평균(간단 저역통과) */
-function smooth(prev: number, next: number, alpha = 0.2) {
+/** 이동평균(간단 저역통과) - 더 빠른 반응을 위해 알파값 증가 */
+function smooth(prev: number, next: number, alpha = 0.4) {
   return prev * (1 - alpha) + next * alpha;
 }
 
@@ -45,7 +45,7 @@ export function useBlinkDetector(videoEl: HTMLVideoElement | null) {
   const [res, setRes] = useState<BlinkResult>({
     ratioL: 0,
     ratioR: 0,
-    state: "OPEN",
+    state: "UNKNOWN",
     blinks: 0,
     lastBlinkAt: null,
   });
@@ -57,14 +57,22 @@ export function useBlinkDetector(videoEl: HTMLVideoElement | null) {
   // 스무딩된 비율
   const rLRef = useRef(0);
   const rRRef = useRef(0);
-  // 상태/임계값
-  const stateRef = useRef<BlinkState>("OPEN");
+  // 상태 관리
+  const stateRef = useRef<BlinkState>("UNKNOWN");
   const blinksRef = useRef(0);
   const lastBlinkAtRef = useRef<number | null>(null);
+  
+  // 상태 지속시간 추적
+  const stateStartTimeRef = useRef<number>(0);
+  const consecutiveFramesRef = useRef<number>(0);
+  const lastDetectedRatioRef = useRef<number>(0);
 
-  // 히스테리시스 임계값(경험치): 닫힘 판단은 낮고, 열림 판단은 약간 높게
-  const CLOSE_T = 0.2;
-  const OPEN_T = 0.23;
+  // 깜빡임 감지를 위한 임계값들 - 더 관대하게 조정
+  const CLOSE_T = 0.12;   // 감음 판단 임계값 (더 낮게)
+  const OPEN_T = 0.15;    // 뜸 판단 임계값 (더 낮게)
+  const MIN_STATE_DURATION = 30;    // 상태 변경 최소 지속시간 (ms) - 더 짧게
+  const MIN_CONSECUTIVE_FRAMES = 1; // 상태 변경을 위한 최소 연속 프레임 수 - 더 관대하게
+  const NO_FACE_TIMEOUT = 1000;     // 얼굴 감지 실패 후 리셋 시간 (ms)
 
   // FaceMesh 초기화
   const initMesh = useMemo(
@@ -76,8 +84,8 @@ export function useBlinkDetector(videoEl: HTMLVideoElement | null) {
       fm.setOptions({
         maxNumFaces: 1,
         refineLandmarks: true,
-        minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5,
+        minDetectionConfidence: 0.7, // 더 높은 신뢰도로 안정성 향상
+        minTrackingConfidence: 0.7,  // 더 높은 추적 신뢰도
       });
       meshRef.current = fm;
     },
@@ -88,50 +96,144 @@ export function useBlinkDetector(videoEl: HTMLVideoElement | null) {
     if (!videoEl) return;
     let cancelled = false;
 
+    // 상태 초기화
+    stateRef.current = "UNKNOWN";
+    stateStartTimeRef.current = Date.now();
+    consecutiveFramesRef.current = 0;
+    rLRef.current = 0;
+    rRRef.current = 0;
+
     (async () => {
       await initMesh();
       if (!meshRef.current) return;
 
-      meshRef.current.onResults((results: any) => {
+      meshRef.current.onResults((results: {multiFaceLandmarks?: {x: number, y: number}[][]}) => {
+        const now = Date.now();
         const lm = results.multiFaceLandmarks?.[0];
-        if (!lm) return;
+        
+        // 얼굴이 감지되지 않은 경우
+        if (!lm) {
+          // 일정 시간 후 상태 리셋
+          if (now - stateStartTimeRef.current > NO_FACE_TIMEOUT) {
+            stateRef.current = "UNKNOWN";
+            rLRef.current = 0;
+            rRRef.current = 0;
+            consecutiveFramesRef.current = 0;
+          }
+          
+          setRes({
+            ratioL: rLRef.current,
+            ratioR: rRRef.current,
+            state: stateRef.current,
+            blinks: blinksRef.current,
+            lastBlinkAt: lastBlinkAtRef.current,
+          });
+          return;
+        }
 
+        // EAR 계산 및 스무딩
         const rawL = eyeOpenRatio(lm, LEFT);
         const rawR = eyeOpenRatio(lm, RIGHT);
+        
+        // 초기값이 0이면 바로 설정 (스무딩 없이)
+        if (rLRef.current === 0) rLRef.current = rawL;
+        if (rRRef.current === 0) rRRef.current = rawR;
+        
+        rLRef.current = smooth(rLRef.current, rawL);
+        rRRef.current = smooth(rRRef.current, rawR);
+        
+        // 평균 EAR 계산
+        const avgRatio = (rLRef.current + rRRef.current) / 2;
+        const currentState = stateRef.current;
+        let newState = currentState;
 
-        // 스무딩
-        rLRef.current = smooth(rLRef.current || rawL, rawL);
-        rRRef.current = smooth(rRRef.current || rawR, rawR);
-
-        // 양쪽 평균으로 상태 판단 (원하면 좌/우 개별 판단도 가능)
-        const avg = (rLRef.current + rRRef.current) / 2;
-
-        let st = stateRef.current;
-        if (st === "OPEN" && avg < CLOSE_T) st = "CLOSED";
-        else if (st === "CLOSED" && avg > OPEN_T) {
-          st = "OPEN";
-          blinksRef.current += 1; // CLOSED → OPEN 전이 = blink
-          lastBlinkAtRef.current = Date.now();
+        // 상태 전환 로직
+        const timeSinceStateChange = now - stateStartTimeRef.current;
+        
+        // 연속 프레임 검사를 더 관대하게 - 비율이 크게 변하지 않으면 연속으로 간주
+        const ratioDiff = Math.abs(avgRatio - lastDetectedRatioRef.current);
+        if (ratioDiff < 0.02) { // 0.02 이내의 변화는 동일한 것으로 간주
+          consecutiveFramesRef.current += 1;
+        } else {
+          consecutiveFramesRef.current = 1;
         }
-        stateRef.current = st;
+        lastDetectedRatioRef.current = avgRatio;
+
+        // 상태 변경 조건 확인 (최소 지속시간과 연속 프레임 조건)
+        const canChangeState = timeSinceStateChange >= MIN_STATE_DURATION && 
+                               consecutiveFramesRef.current >= MIN_CONSECUTIVE_FRAMES;
+
+        switch (currentState) {
+          case "UNKNOWN":
+            // 초기 상태는 즉시 전환 - 얼굴이 감지되면 바로 상태 결정
+            console.log(`UNKNOWN -> 평균: ${avgRatio.toFixed(3)}, OPEN_T: ${OPEN_T}, CLOSE_T: ${CLOSE_T}`);
+            if (avgRatio > OPEN_T) {
+              console.log(`UNKNOWN -> OPEN 전환 (${avgRatio.toFixed(3)} > ${OPEN_T})`);
+              newState = "OPEN";
+            } else if (avgRatio < CLOSE_T) {
+              console.log(`UNKNOWN -> CLOSED 전환 (${avgRatio.toFixed(3)} < ${CLOSE_T})`);
+              newState = "CLOSED";
+            } else {
+              console.log(`UNKNOWN 유지 (${CLOSE_T} <= ${avgRatio.toFixed(3)} <= ${OPEN_T})`);
+            }
+            break;
+            
+          case "OPEN":
+            if (canChangeState && avgRatio < CLOSE_T) {
+              newState = "CLOSING";
+            }
+            break;
+            
+          case "CLOSING":
+            if (canChangeState) {
+              if (avgRatio < CLOSE_T * 0.8) { // 더 확실히 감긴 상태
+                newState = "CLOSED";
+              } else if (avgRatio > OPEN_T) { // 다시 뜨는 경우
+                newState = "OPENING";
+              }
+            }
+            break;
+            
+          case "CLOSED":
+            if (canChangeState && avgRatio > CLOSE_T) {
+              newState = "OPENING";
+            }
+            break;
+            
+          case "OPENING":
+            if (canChangeState && avgRatio > OPEN_T) {
+              newState = "OPEN";
+              // 완전한 깜빡임 사이클 완료!
+              blinksRef.current += 1;
+              lastBlinkAtRef.current = now;
+            }
+            break;
+        }
+
+        // 상태가 변경된 경우
+        if (newState !== currentState) {
+          stateRef.current = newState;
+          stateStartTimeRef.current = now;
+          consecutiveFramesRef.current = 0;
+        }
 
         setRes({
           ratioL: rLRef.current,
           ratioR: rRRef.current,
-          state: st,
+          state: newState,
           blinks: blinksRef.current,
           lastBlinkAt: lastBlinkAtRef.current,
         });
       });
 
-      // 카메라 프레임 → FaceMesh로 보내기
+      // 카메라 프레임 → FaceMesh로 보내기 (더 높은 해상도와 빠른 처리)
       camRef.current = new Camera(videoEl, {
         onFrame: async () => {
           if (!meshRef.current) return;
           await meshRef.current.send({ image: videoEl });
         },
-        width: 640,
-        height: 360,
+        width: 1280, // 더 높은 해상도로 정확도 향상
+        height: 720,
       });
 
       if (!cancelled) camRef.current.start();
@@ -139,11 +241,12 @@ export function useBlinkDetector(videoEl: HTMLVideoElement | null) {
 
     return () => {
       cancelled = true;
+      const rafId = rafRef.current;
       camRef.current?.stop();
       camRef.current = null;
       meshRef.current?.close();
       meshRef.current = null;
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      if (rafId) cancelAnimationFrame(rafId);
     };
   }, [videoEl, initMesh]);
 
