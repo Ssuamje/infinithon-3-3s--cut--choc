@@ -269,10 +269,22 @@ export default function App() {
             fontFamily: "monospace",
           }}
         >
-          <div style={{ marginBottom: 8, fontWeight: 700 }}>Processed Result</div>
+          <div style={{ marginBottom: 8, fontWeight: 700, textAlign: "center", fontSize: "18px" }}><b>"{String(processed.user_name)}"의 눈 건강 리포트 💾</b></div>
 
           {"message" in processed && !("report" in processed) && (
             <div style={{ marginBottom: 6 }}>{String(processed.message)}</div>
+          )}
+
+          {"daily_blink_per_minute" in processed && (
+            <div style={{ marginTop: 6 }}>
+              <b>오늘의 평균 눈 깜박임 횟수 👁️</b> {Number(processed.daily_blink_per_minute || 0).toFixed(2)}회 / 분
+            </div>
+          )}
+
+          {"report" in processed && (
+            <div style={{ marginTop: 6, textAlign: "center", fontSize: "15px" }}>
+              <b>['촉💦'의 한 마디]</b>
+            </div>
           )}
 
           {"report" in processed && (
@@ -281,9 +293,9 @@ export default function App() {
             </pre>
           )}
 
-          {"daily_blink_per_minute" in processed && (
-            <div style={{ marginTop: 6 }}>
-              Daily BPM: {Number(processed.daily_blink_per_minute || 0).toFixed(2)}
+          {"daily_line_plot_b64" in processed && (
+            <div style={{ marginTop: 6, textAlign: "center", fontSize: "15px" }}>
+              <b>[오늘의 깜빡✨ 그래프]</b>
             </div>
           )}
 
