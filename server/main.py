@@ -32,6 +32,9 @@ app.add_middleware(
 )
 
 data_store: Dict[str, Dict] = {}
+history_store: Dict[str, Dict] = {}
+for name in ['increase', 'decrease', 'stable', 'month', 'week', 'first']:
+    history_store[name] = pd.read_csv(f'data/blink_data_{name}.csv')
 
 async def cleanup_loop():
     """1시간 이상 된 항목 정리 루프 (백그라운드 태스크)"""
@@ -66,9 +69,13 @@ async def send_processed_data(request_id: str):
 
     # 필요하면 여기서 실제 분석 호출
     if analyze_tablet_data and generate_report:
-        preprocessed_data = pd.DataFrame({"TIMESTAMP": saved['payload']['events']})
+        history_df = history_store['increase']
+        user_info = {
+            'joined_at': history_df['TIMESTAMP'].min(),
+        }
+        preprocessed_data = pd.concat([history_df, pd.DataFrame({"TIMESTAMP": saved['payload']['events']})])
         analyzed = analyze_tablet_data(preprocessed_data)
-        report = generate_report(preprocessed_data, analyzed)
+        report = generate_report(preprocessed_data, analyzed, user_info=user_info)
         return report # {"report": report['report_text'], "image": report['image']}
     else:
         return {"message": "Analysis functions are not available."}

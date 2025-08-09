@@ -47,35 +47,18 @@ def analyze_tablet_data(data):
     # 2, "2025-08-06", 4, 300
     # 3, "2025-08-06", 5, 350
 
-    timestamps = []
-    for i, row in data.iterrows(): # Skip header line
-        parsed_timestamp = datetime.fromisoformat(row.TIMESTAMP.strip().replace("Z", "+00:00"))
-        timestamps.append(parsed_timestamp)
+    data['DATE_MONTH'] = data.TIMESTAMP.apply(lambda x: x.strftime("%Y-%m"))
+    data['DATE_WEEK'] = data.TIMESTAMP.apply(lambda x: x.strftime("%Y") + "-W" + str(x.isocalendar()[1]))
+    data['DATE_HOUR'] = data.TIMESTAMP.apply(lambda x: x.strftime("%Y-%m-%dT%H"))
+
+    last_month = data[data.DATE_MONTH.apply(lambda x: datetime.strptime(x, "%Y-%m")) < datetime.strptime(data.iloc[-1].TIMESTAMP.strftime("%Y-%m"), "%Y-%m")]
+    last_week = data[data.DATE_WEEK == data.iloc[-1].TIMESTAMP.strftime("%Y") + "-W" + str(data.iloc[-1].TIMESTAMP.isocalendar()[1] - 1)]
+    this_week = data[data.DATE_WEEK == data.iloc[-1].TIMESTAMP.strftime("%Y") + "-W" + str(data.iloc[-1].TIMESTAMP.isocalendar()[1])]
+    bpm_history_month = 60 / last_month.groupby('DATE_MONTH').BLINK_INTERVAL.mean()
+    bpm_history_week = 60 / last_week.groupby('DATE_WEEK').BLINK_INTERVAL.mean()
+    bpm_this_week = 60 / this_week.groupby('DATE_HOUR').BLINK_INTERVAL.mean()
     
-    # Example processing: Count blinks per hour
-    # Count blinks per hour
-    blink_counts = {}
-    for timestamp in timestamps:
-        hour = timestamp.replace(minute=0, second=0, microsecond=0)
-        if hour not in blink_counts:
-            blink_counts[hour] = 0
-        blink_counts[hour] += 1
-
-    # Create a DataFrame
-    data_rows = []
-    for hour, blinks in blink_counts.items():
-        if blinks < MIN_LOG_NUM:
-            continue
-        data_rows.append({
-            "ID": len(data_rows) + 1,
-            "DATE": hour.date(),
-            "HOUR": hour.hour,
-            "BLINKS_PER_HOUR": blinks
-        })
-    df = pd.DataFrame(data_rows)
-
-    # TODO: interpolate logs where there are no enough blinks in a given hour
-    return df
+    return (bpm_history_month, bpm_history_week, bpm_this_week)
 
 def clean_and_slide_data(data: pd.DataFrame, date: str) -> pd.DataFrame:
     """
@@ -83,26 +66,28 @@ def clean_and_slide_data(data: pd.DataFrame, date: str) -> pd.DataFrame:
     :param data: DataFrame containing the blink data.
     :return: Cleaned and slid DataFrame.
     """
+
+    data['TIMESTAMP'] = pd.to_datetime(data['TIMESTAMP'])
+    data['BLINK_INTERVAL'] = data.TIMESTAMP.diff()
+    data['BLINK_INTERVAL'] = data['BLINK_INTERVAL'].dt.seconds
+    data['BLINK_PER_MINUTE'] = 60 / data['BLINK_INTERVAL']
+    data.dropna(inplace=True)
+    data = data[data['BLINK_INTERVAL'] < INTERVAL_THRESHOLD]
+    slided_data = data.copy()
+    
     # Filter data for the given date
-    filtered_df = data[pd.to_datetime(data['TIMESTAMP']).dt.date == datetime.strptime(date, "%Y-%m-%d").date()]
+    filtered_df = data[pd.to_datetime(data['TIMESTAMP']).dt.strftime("%Y-%m-%d") == date]
     if filtered_df.empty:
         print(f"No data available for {date}")
         return
     print(len(filtered_df), "rows gathered this session")
 
-    filtered_df['TIMESTAMP'] = pd.to_datetime(filtered_df['TIMESTAMP'])
-    filtered_df['BLINK_INTERVAL'] = filtered_df.TIMESTAMP.diff()
-    filtered_df['BLINK_INTERVAL'] = filtered_df['BLINK_INTERVAL'].dt.seconds
-    filtered_df['BLINK_PER_MINUTE'] = 60 / filtered_df['BLINK_INTERVAL']
-    filtered_df.dropna(inplace=True)
-    filtered_df = filtered_df[filtered_df['BLINK_INTERVAL'] < INTERVAL_THRESHOLD]
-    
     min_filter = (filtered_df.groupby(pd.Grouper(key='TIMESTAMP', freq='h'))['BLINK_PER_MINUTE'].count() >= MIN_LOG_NUM).values
     grouped = filtered_df.groupby(pd.Grouper(key='TIMESTAMP', freq='h'))['BLINK_PER_MINUTE'].mean()
     grouped = grouped[min_filter]
     grouped.index = grouped.index.strftime('%H')
     
-    return grouped
+    return slided_data, grouped
 
 def plot_blink_data(cleaned_data: pd.DataFrame, date: str):
     """
@@ -144,7 +129,7 @@ def plot_blink_data(cleaned_data: pd.DataFrame, date: str):
 
     return image
 
-def generate_report_text(data: pd.DataFrame) -> str:
+def generate_report_text(user_info: dict = None, histories: dict = None) -> str:
     """
     Function to analyze tablet data using ChatGPT.
     :param data: DataFrame containing the blink data.
@@ -154,10 +139,20 @@ def generate_report_text(data: pd.DataFrame) -> str:
     today = "2025-08-10 11:13:01"
     weather = get_weather_forecast()
 
-    text_data = "DATE, HOUR, BLINKS_PER_HOUR\n" + \
-        "\n".join(", ".join([row.DATE.strftime("%Y-%m-%d"), str(row.HOUR), str(row.BLINKS_PER_HOUR)]) for _, row in data.iterrows())
+    last_month, last_week, this_week = histories
+    text_data = "================================\n"
+    text_data += "지난 월별 분당 평균 눈 깜빡임 횟수:\n" + \
+        "\n".join(f"{row.DATE_MONTH}, {row.BLINK_INTERVAL:.2f}" for _, row in last_month.to_frame().reset_index().iterrows()) + "\n"
+    text_data += "--------------------------------\n"
+    text_data += "지난 주의 분당 평균 눈 깜빡임 횟수:\n" + \
+        "\n".join(f"{row.DATE_WEEK}, {row.BLINK_INTERVAL:.2f}" for _, row in last_week.to_frame().reset_index().iterrows()) + "\n"
+    text_data += "--------------------------------\n"
+    text_data += "이번 주의 일별 분당 평균 눈 깜빡임 횟수:\n" + \
+        "\n".join(f"{row.DATE_HOUR}, {row.BLINK_INTERVAL:.2f}" for _, row in this_week.to_frame().reset_index().iterrows()) + "\n"
+    text_data += "===============================\n"
+    
     with open('prompts/system_prompt.txt', 'r') as file:
-        system_prompt = file.read().format(today=today, data=text_data, weather=weather)
+        system_prompt = file.read().format(today=today, data=text_data, weather=weather, user=user_info)
     with open('prompts/daily_report.txt', 'r') as file:
         prompt = file.read()
         prompt = prompt
@@ -185,7 +180,7 @@ def generate_report_text(data: pd.DataFrame) -> str:
     except Exception as e:
         return f"An error occurred: {e}"
 
-def generate_report(raw_data: pd.DataFrame, data: pd.DataFrame) -> str:
+def generate_report(raw_data: pd.DataFrame, user_info: dict = None) -> str:
     """
     Function to generate a report from the blink data.
     :param data: DataFrame containing the blink data.
@@ -194,12 +189,13 @@ def generate_report(raw_data: pd.DataFrame, data: pd.DataFrame) -> str:
     # Plot the blink data
     # date = datetime.now().strftime("%Y-%m-%d")
     date = datetime.now().strftime("2025-08-08")
-    cleaned_data = clean_and_slide_data(raw_data, date)
+    slided_data, cleaned_data = clean_and_slide_data(raw_data, date)
     image = plot_blink_data(cleaned_data, date)
     daily_bpm = cleaned_data.mean() if not cleaned_data.empty else 0
 
     # Generate the report text
-    report_text = generate_report_text(data)
+    analyzed = analyze_tablet_data(slided_data)
+    report_text = generate_report_text(user_info=user_info, histories=analyzed)
 
     # Return the report text and image
     return {
@@ -213,7 +209,9 @@ def generate_report(raw_data: pd.DataFrame, data: pd.DataFrame) -> str:
 if __name__ == "__main__":
     # Replace this with your actual tablet data
     raw_data = load_blink_data('data/blink_data_increase.csv')
-    analyzed = analyze_tablet_data(raw_data)
-    report = generate_report(raw_data, analyzed)
+    user_info = {
+        'joined_at': raw_data['TIMESTAMP'].min(),
+    }
+    report = generate_report(raw_data, user_info=user_info)
     print("Generated Report:")
     print(report['report'])
