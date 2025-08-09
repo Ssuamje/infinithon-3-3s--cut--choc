@@ -216,9 +216,9 @@ const Container = styled.div`
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   margin-bottom: 20px;
 
-  /* 드래그 영역 개선 */
-  -webkit-app-region: drag; /* macOS */
-  app-region: drag; /* 표준 */
+  /* 전체 영역을 드래그 가능하게 설정 */
+  -webkit-app-region: drag;
+  user-select: none;
 `;
 
 const StatusBar = styled.div<{ $gamePhase: string }>`
@@ -237,9 +237,9 @@ const StatusBar = styled.div<{ $gamePhase: string }>`
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
   animation: ${fadeInUp} 0.6s ease-out;
 
-  /* 드래그 방지 (버튼 클릭을 위해) */
-  -webkit-app-region: no-drag;
-  app-region: no-drag;
+  /* 버튼 영역은 드래그 방지 */
+  -webkit-app-region: drag;
+  user-select: none; /* 텍스트 드래그 방지 */
 
   ${({ $gamePhase }) =>
     $gamePhase === "idle" &&
@@ -295,6 +295,7 @@ const Section = styled.div<{ $align?: string }>`
 const LifeContainer = styled.div`
   display: flex;
   gap: clamp(4px, 1vw, 6px);
+  -webkit-app-region: no-drag;
 `;
 
 const Heart = styled.span<{ $active: boolean }>`
@@ -304,10 +305,13 @@ const Heart = styled.span<{ $active: boolean }>`
 
   opacity: ${({ $active }) => ($active ? 1 : 0.3)};
   transform: ${({ $active }) => ($active ? "scale(1)" : "scale(0.9)")};
+  -webkit-app-region: no-drag;
+  user-select: none; /* 텍스트 선택 방지 */
 `;
 
 const ComboContainer = styled.div`
   text-align: center;
+  -webkit-app-region: no-drag;
 `;
 
 const ComboNumber = styled.div<{ $gamePhase: string }>`
@@ -316,6 +320,8 @@ const ComboNumber = styled.div<{ $gamePhase: string }>`
   color: #f97316;
   line-height: 1;
   text-shadow: 0 2px 8px rgba(249, 115, 22, 0.3);
+  -webkit-app-region: no-drag;
+  user-select: none; /* 텍스트 선택 방지 */
 
   ${({ $gamePhase }) =>
     $gamePhase === "warning" &&
@@ -331,6 +337,8 @@ const ComboLabel = styled.div`
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  -webkit-app-region: no-drag;
+  user-select: none; /* 텍스트 선택 방지 */
 `;
 
 const StatusDot = styled.div<{ $gamePhase: string }>`
@@ -340,7 +348,7 @@ const StatusDot = styled.div<{ $gamePhase: string }>`
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   transition: all 0.3s ease;
   border: 2px solid rgba(255, 255, 255, 0.3);
-
+  -webkit-app-region: no-drag;
   ${({ $gamePhase }) =>
     $gamePhase === "idle" &&
     css`
@@ -376,6 +384,8 @@ const FeverBadge = styled.div`
   font-weight: 600;
   box-shadow: 0 4px 12px rgba(249, 115, 22, 0.4);
   animation: ${fadeInUp} 0.3s ease-out;
+  -webkit-app-region: no-drag;
+  user-select: none; /* 텍스트 선택 방지 */
 `;
 
 const ScoreContainer = styled.div`
@@ -383,6 +393,7 @@ const ScoreContainer = styled.div`
   display: flex;
   flex-direction: column;
   align-items: flex-end;
+  -webkit-app-region: no-drag;
 `;
 
 const Score = styled.span`
@@ -391,6 +402,8 @@ const Score = styled.span`
   color: #1f2937;
   line-height: 1;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  -webkit-app-region: no-drag;
+  user-select: none; /* 텍스트 선택 방지 */
 `;
 
 const ScoreLabel = styled.span`
@@ -400,11 +413,14 @@ const ScoreLabel = styled.span`
   margin-top: 2px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  -webkit-app-region: no-drag;
+  user-select: none; /* 텍스트 선택 방지 */
 `;
 
 const ButtonContainer = styled.div`
   display: flex;
   gap: clamp(6px, 1.5vw, 8px);
+  -webkit-app-region: no-drag;
 `;
 
 const Button = styled.button<{ $variant?: string; $active?: boolean }>`
@@ -434,9 +450,8 @@ const Button = styled.button<{ $variant?: string; $active?: boolean }>`
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
 
-  /* 드래그 방지 */
   -webkit-app-region: no-drag;
-  app-region: no-drag;
+  user-select: none;
 
   ${({ $variant, $active }) =>
     $variant === "camera" &&
@@ -462,6 +477,10 @@ const TimerSection = styled.div`
   margin: 0 auto; // 중앙 정렬
   pointer-events: none;
   margin-top: 16px; // 위 여백 추가
+
+  /* 드래그 가능 */
+  -webkit-app-region: drag;
+  user-select: none; /* 텍스트 드래그 방지 */
 `;
 
 const TimerBar = styled.div`
@@ -472,6 +491,7 @@ const TimerBar = styled.div`
   overflow: hidden;
   margin-bottom: clamp(8px, 2vw, 12px);
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+  -webkit-app-region: no-drag;
 `;
 
 const TimerProgress = styled.div<{ $width: number; $gamePhase: string }>`
@@ -480,7 +500,7 @@ const TimerProgress = styled.div<{ $width: number; $gamePhase: string }>`
   transition: width 0.1s ease;
   border-radius: clamp(2px, 0.5vw, 3px);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-
+  -webkit-app-region: no-drag;
   ${({ $gamePhase }) =>
     $gamePhase === "idle" &&
     css`
@@ -509,6 +529,8 @@ const TimerProgress = styled.div<{ $width: number; $gamePhase: string }>`
 const Countdown = styled.div`
   text-align: center;
   pointer-events: none;
+  -webkit-app-region: no-drag;
+  user-select: none; /* 텍스트 드래그 방지 */
 `;
 
 const CountdownText = styled.span`
@@ -518,6 +540,8 @@ const CountdownText = styled.span`
   text-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
   display: block;
   animation: ${comboPulse} 1s infinite;
+  -webkit-app-region: no-drag;
+  user-select: none; /* 텍스트 선택 방지 */
 `;
 
 const CountdownMessage = styled.div`
@@ -526,6 +550,8 @@ const CountdownMessage = styled.div`
   font-weight: 500;
   margin-top: 4px;
   opacity: 0.8;
+  -webkit-app-region: no-drag;
+  user-select: none; /* 텍스트 선택 방지 */
 `;
 
 const GameOverlay = styled.div`
@@ -541,29 +567,30 @@ const GameOverlay = styled.div`
   z-index: 2000;
   pointer-events: auto;
   backdrop-filter: blur(8px);
+  -webkit-app-region: no-drag;
 `;
 
 const GameOverContent = styled.div`
   background: white;
-  padding: clamp(24px, 6vw, 40px);
-  border-radius: clamp(16px, 4vw, 24px);
+  padding: clamp(12px, 3vw, 16px); /* 24px에서 12px로 줄임 */
+  border-radius: clamp(12px, 3vw, 16px); /* 16px에서 12px로 줄임 */
   text-align: center;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3); /* 그림자 줄임 */
   animation: ${fadeInUp} 0.4s ease-out;
-  max-width: 400px;
-  width: 90vw;
+  max-width: 300px; /* 400px에서 300px로 줄임 */
+  width: 80vw; /* 90vw에서 80vw로 줄임 */
 `;
 
 const GameOverTitle = styled.h2`
-  margin: 0 0 16px;
+  margin: 0 0 8px; /* 16px에서 8px로 줄임 */
   color: #ef4444;
-  font-size: clamp(20px, 5vw, 28px);
+  font-size: clamp(16px, 4vw, 20px); /* 20px에서 16px로 줄임 */
   font-weight: 700;
 `;
 
 const GameOverScore = styled.p`
-  margin: 0 0 24px;
-  font-size: clamp(14px, 3.5vw, 18px);
+  margin: 0 0 12px; /* 24px에서 12px로 줄임 */
+  font-size: clamp(12px, 3vw, 14px); /* 14px에서 12px로 줄임 */
   color: #6b7280;
   font-weight: 500;
 `;
@@ -572,18 +599,18 @@ const RestartButton = styled.button`
   background: linear-gradient(135deg, #10b981, #059669);
   color: white;
   border: none;
-  padding: clamp(10px, 2.5vw, 14px) clamp(20px, 5vw, 28px);
-  border-radius: clamp(8px, 2vw, 12px);
-  font-size: clamp(14px, 3.5vw, 16px);
+  padding: clamp(8px, 2vw, 10px) clamp(16px, 4vw, 20px); /* 패딩 줄임 */
+  border-radius: clamp(6px, 1.5vw, 8px); /* 8px에서 6px로 줄임 */
+  font-size: clamp(12px, 3vw, 14px); /* 14px에서 12px로 줄임 */
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 3px 8px rgba(16, 185, 129, 0.3); /* 그림자 줄임 */
 
   &:hover {
     background: linear-gradient(135deg, #059669, #047857);
     transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
   }
 
   &:active {
