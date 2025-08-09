@@ -1,4 +1,3 @@
-// src/App.tsx
 import { useCamera } from "./hooks/useCamera";
 import { useDisplaySettings } from "./hooks/useDisplaySettings";
 import { useBlinkDetector } from "./useBlinkDetector";
@@ -58,6 +57,22 @@ export default function App() {
     }
   };
 
+  // HUD 표시 문자열 (평균/임계값/최소/최대/최근 갱신)
+  const hudText = (() => {
+    const avg = isFinite(blink.avgRatio) ? blink.avgRatio : 0;
+    const min = isFinite(blink.windowMin) ? blink.windowMin : 0;
+    const max = isFinite(blink.windowMax) ? blink.windowMax : 0;
+    const lastTs = blink.lastCalibratedAt
+      ? new Date(blink.lastCalibratedAt).toLocaleTimeString()
+      : "-";
+
+    return `평균: ${avg.toFixed(3)} | 임계값: 감음<${blink.CLOSE_T.toFixed(
+      2
+    )} / 뜸>${blink.OPEN_T.toFixed(2)} | 최솟값: ${min.toFixed(
+      3
+    )} / 최댓값: ${max.toFixed(3)} | 최근 갱신: ${lastTs}`;
+  })();
+
   return (
     <div style={styles.wrap}>
       {/* 깜빡임 경고 오버레이 - 모든 창 위에 표시 */}
@@ -87,7 +102,7 @@ export default function App() {
         isCameraOn={showFace}
       />
 
-      {/* 컨트롤 패널 - 토글 가능 */}
+      {/* 컨트롤 패널 - 토글 가능 (기존 props 유지) */}
       {showControlPanel && (
         <ControlPanel
           state={state}
@@ -121,6 +136,9 @@ export default function App() {
         isBlinking={isBlinking}
       />
 
+      {/* 캘리브레이션/HUD 정보: 기존 문구 유지 + 확장 정보 별도 표기 */}
+      {showHUD && <p style={styles.hud}>{hudText}</p>}
+
       <p style={styles.tip}>
         ※ 완전한 깜빡임 사이클(뜸→감음→뜸)을 감지합니다. 눈을 감고만 있으면
         카운트되지 않아요!
@@ -138,17 +156,24 @@ const styles: Record<string, React.CSSProperties> = {
     minWidth: "320px",
     margin: "0 auto",
     boxSizing: "border-box",
-    background: "transparent", // 배경을 투명하게 설정
+    background: "transparent",
   },
   title: {
     margin: "0 0 12px",
-    fontSize: "clamp(16px, 4vw, 18px)", // 반응형 폰트 크기
+    fontSize: "clamp(16px, 4vw, 18px)",
     textAlign: "center",
   },
   tip: {
     color: "#666",
     marginTop: 12,
-    fontSize: "clamp(11px, 2.5vw, 12px)", // 반응형 폰트 크기
+    fontSize: "clamp(11px, 2.5vw, 12px)",
     textAlign: "center",
+  },
+  hud: {
+    color: "#333",
+    marginTop: 8,
+    fontSize: "clamp(12px, 2.5vw, 13px)",
+    textAlign: "center",
+    whiteSpace: "pre-wrap",
   },
 };
