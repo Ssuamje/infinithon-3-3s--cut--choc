@@ -1,18 +1,17 @@
+// src/App.tsx
 import { useCamera } from "./hooks/useCamera";
 import { useDisplaySettings } from "./hooks/useDisplaySettings";
 import { useBlinkDetector } from "./useBlinkDetector";
 import { useGameLogic } from "./useGameLogic";
-import { useBlinkTimer } from "./hooks/useBlinkTimer";
 import { GameUI } from "./GameUI";
 import { VideoDisplay } from "./components/VideoDisplay";
 import { ControlPanel } from "./components/ControlPanel";
-import { BlinkWarningOverlay } from "./components/BlinkWarningOverlay";
 import { useState } from "react";
+import { useMicVAD } from "./hooks/useMicVAD";
 
 export default function App() {
   // 카메라 관련 로직
-  const { videoRef, state, ready, error, startCamera, stopCamera } =
-    useCamera();
+  const { videoRef, state, ready, error, startCamera, stopCamera } = useCamera();
 
   // 화면 표시 설정 관련 로직
   const {
@@ -24,40 +23,36 @@ export default function App() {
     setShowCharacter,
   } = useDisplaySettings();
 
-  // HUD 표시 상태
+  // HUD / ControlPanel 표시 상태
   const [showHUD, setShowHUD] = useState(true);
-
-  // ControlPanel 표시 상태
   const [showControlPanel, setShowControlPanel] = useState(true);
 
   // 깜빡임 감지
   const blink = useBlinkDetector(videoRef);
 
   // 게임 로직
-  const { gameState, resetGame, togglePause } = useGameLogic(
-    blink.blinks,
-    blink.lastBlinkAt
-  );
+  const { gameState, resetGame, togglePause, restoreHeart, loseHeart } =
+    useGameLogic(blink.blinks, blink.lastBlinkAt);
 
-  // 깜빡임 타이머 (6초)
-  const blinkTimer = useBlinkTimer(blink.lastBlinkAt, 6000);
+  // 🎤 VAD 상태 (표시용)
+  const vad = useMicVAD(true);
 
-  const isBlinking = blink.state === "CLOSED" || blink.state === "CLOSING";
+  const isBlinking =
+    blink.state === "CLOSED" || blink.state === "CLOSING";
 
-  // 카메라 표시 토글 함수 (스트림은 유지하고 화면만 숨김/표시)
+  // 카메라 표시 토글 (스트림은 유지)
   const toggleCamera = () => {
     if (showFace) {
       setShowFace(false);
     } else {
       setShowFace(true);
-      // 카메라가 아직 시작되지 않았다면 시작
       if (state !== "ready") {
         startCamera();
       }
     }
   };
 
-  // HUD 표시 문자열 (평균/임계값/최소/최대/최근 갱신)
+  // HUD 표시 문자열
   const hudText = (() => {
     const avg = isFinite(blink.avgRatio) ? blink.avgRatio : 0;
     const min = isFinite(blink.windowMin) ? blink.windowMin : 0;
@@ -68,23 +63,55 @@ export default function App() {
 
     return `평균: ${avg.toFixed(3)} | 임계값: 감음<${blink.CLOSE_T.toFixed(
       2
-    )} / 뜸>${blink.OPEN_T.toFixed(2)} | 최솟값: ${min.toFixed(
+    )} / 뜸>${blink.OPEN_T.toFixed(
+      2
+    )} | 최솟값: ${min.toFixed(3)} / 최댓값: ${max.toFixed(
       3
-    )} / 최댓값: ${max.toFixed(3)} | 최근 갱신: ${lastTs}`;
+    )} | 최근 갱신: ${lastTs}`;
   })();
 
   return (
     <div style={styles.wrap}>
-      {/* 깜빡임 경고 오버레이 - 모든 창 위에 표시 */}
-      <BlinkWarningOverlay
-        isVisible={blinkTimer.progress > 50 || blinkTimer.isWarning} // 50% 이후부터 표시
-        progress={blinkTimer.progress}
-        timeWithoutBlink={blinkTimer.timeWithoutBlink}
-        combo={gameState.combo}
-        score={gameState.score}
-      />
+      {/* === VAD 상태 (임시 표시) === */}
+      <div style={{ fontSize: 12, marginBottom: 8 }}>
+        VAD: {vad.connected ? "● CONNECTED" : "○ DISCONNECTED"}
+        {" | "}inSpeech: {vad.inSpeech ? "YES" : "no"}
+        {" | "}p={vad.lastProb.toFixed(3)}
+        {vad.error && (
+          <span style={{ color: "red" }}>{" | "}{vad.error}</span>
+        )}
+      </div>
 
-      {/* 게임 UI - 항상 표시 */}
+      {/* 디버깅용 로그 (개발 중에만 표시) */}
+      {process.env.NODE_ENV === "development" && (
+        <div
+          style={{
+            position: "fixed",
+            top: "10px",
+            right: "10px",
+            background: "rgba(0,0,0,0.8)",
+            color: "white",
+            padding: "8px",
+            fontSize: "12px",
+            zIndex: 10000,
+            fontFamily: "monospace",
+          }}
+        >
+          <div>Hearts: {gameState.hearts}/3</div>
+          <div>Game Time: {Math.floor(gameState.timeRemaining / 1000)}s</div>
+          <div>Raw Game Time: {gameState.timeRemaining}ms</div>
+          <div>Last Blink: {blink.lastBlinkAt ? "Yes" : "No"}</div>
+          <div>Current Time: {new Date().toLocaleTimeString()}</div>
+          <div>
+            Last Blink Time:{" "}
+            {blink.lastBlinkAt
+              ? new Date(blink.lastBlinkAt).toLocaleTimeString()
+              : "None"}
+          </div>
+        </div>
+      )}
+
+      {/* 게임 UI */}
       <GameUI
         hearts={gameState.hearts}
         combo={gameState.combo}
@@ -102,7 +129,7 @@ export default function App() {
         isCameraOn={showFace}
       />
 
-      {/* 컨트롤 패널 - 토글 가능 (기존 props 유지) */}
+      {/* 컨트롤 패널 */}
       {showControlPanel && (
         <ControlPanel
           state={state}
@@ -125,7 +152,7 @@ export default function App() {
         />
       )}
 
-      {/* 비디오/캐릭터 표시 - 항상 렌더링하되 내부에서 표시 제어 */}
+      {/* 비디오/캐릭터 */}
       <VideoDisplay
         videoRef={videoRef}
         showFace={showFace}
@@ -136,12 +163,11 @@ export default function App() {
         isBlinking={isBlinking}
       />
 
-      {/* 캘리브레이션/HUD 정보: 기존 문구 유지 + 확장 정보 별도 표기 */}
+      {/* HUD */}
       {showHUD && <p style={styles.hud}>{hudText}</p>}
 
       <p style={styles.tip}>
-        ※ 완전한 깜빡임 사이클(뜸→감음→뜸)을 감지합니다. 눈을 감고만 있으면
-        카운트되지 않아요!
+        ※ 완전한 깜빡임 사이클(뜸→감음→뜸)을 감지합니다. 눈을 감고만 있으면 카운트되지 않아요!
       </p>
     </div>
   );
