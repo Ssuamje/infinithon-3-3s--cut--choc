@@ -66,9 +66,8 @@ export function useBlinkDetector(videoRef: RefObject<HTMLVideoElement>) {
   const INIT_OPEN_T = 0.35;
 
   // 캘리브레이션 설정
-  const CAL_WINDOW_MS = 10_000; // 10초 창
-  const HYSTERESIS = 0.05; // 중간값 기준 ±0.05
-
+  const INIT_FIXED_MS = 5_000; // 5초
+  const CAL_WINDOW_MS = 10_000; // 10초
   const [res, setRes] = useState<BlinkResult>({
     ratioL: 0,
     ratioR: 0,
@@ -230,8 +229,8 @@ export function useBlinkDetector(videoRef: RefObject<HTMLVideoElement>) {
           const elapsedSinceStart = now - startedAtRef.current;
           const elapsedInWindow = now - windowStartRef.current;
 
-          // 첫 10초는 초기 임계값 고정 사용
-          const inInitialFixedPhase = elapsedSinceStart < CAL_WINDOW_MS;
+          // 첫 5초는 초기 임계값 고정 사용
+          const inInitialFixedPhase = elapsedSinceStart < INIT_FIXED_MS;
 
           // 윈도우가 끝났다면 임계값 갱신(초기 10초 이후부터)
           if (!inInitialFixedPhase && elapsedInWindow >= CAL_WINDOW_MS) {
