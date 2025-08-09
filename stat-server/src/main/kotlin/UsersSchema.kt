@@ -27,7 +27,8 @@ class UserService(database: Database) {
 
     init {
         transaction(database) {
-            SchemaUtils.createMissingTablesAndColumns(Users)
+            SchemaUtils.drop(Users)
+            SchemaUtils.create(Users)
         }
     }
 
