@@ -25,8 +25,8 @@ export default function App() {
   } = useDisplaySettings();
 
   // HUD / ControlPanel 표시 상태
-  const [showHUD, setShowHUD] = useState(true);
-  const [showControlPanel, setShowControlPanel] = useState(true);
+  const [showHUD, setShowHUD] = useState(false);
+  const [showControlPanel, setShowControlPanel] = useState(false);
 
   // 투명도 관련 상태 (새 기능 유지)
   const [opacity, setOpacity] = useState(0.8);
@@ -156,7 +156,7 @@ export default function App() {
   return (
     <div style={styles.wrap}>
       {/* 디버깅용 로그 (개발 중에만 표시) */}
-      {process.env.NODE_ENV === "development" && (
+      {/* {process.env.NODE_ENV === "development" && (
         <div
           style={{
             position: "fixed",
@@ -182,7 +182,7 @@ export default function App() {
               : "None"}
           </div>
         </div>
-      )}
+      )} */}
 
       {/* 게임 UI */}
       <GameUI
@@ -254,15 +254,12 @@ export default function App() {
       {processed && (
         <div
           style={{
-            position: "fixed",
-            bottom: 10,
-            right: 10,
-            zIndex: 9999,
+            position: "relative",
             background: "rgba(0,0,0,0.85)",
             color: "#fff",
             padding: 12,
-            maxWidth: 380,
             borderRadius: 8,
+            marginTop: 10,
             fontFamily: "monospace",
           }}
         >
