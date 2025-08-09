@@ -1,20 +1,26 @@
 package com.smilegate
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.javatime.timestamp
 import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
 import org.jetbrains.exposed.sql.transactions.transaction
+import java.time.Instant
 
 @Serializable
-data class ExposedUser(val name: String, val age: Int)
+data class UserRequest(val nickname: String)
+
+@Serializable
+data class User(val nickname: String, @Contextual val createdAt: Instant)
 
 class UserService(database: Database) {
     object Users : Table() {
         val id = integer("id").autoIncrement()
-        val name = varchar("name", length = 50)
-        val age = integer("age")
+        val nickname = varchar("nickname", length = 50).uniqueIndex()
+        val createdAt = timestamp("created_at")
 
         override val primaryKey = PrimaryKey(id)
     }
@@ -25,35 +31,24 @@ class UserService(database: Database) {
         }
     }
 
-    suspend fun create(user: ExposedUser): Int = dbQuery {
+    suspend fun create(userRequest: UserRequest): User = dbQuery {
+        val existingUser = Users.selectAll().where { Users.nickname eq userRequest.nickname }.singleOrNull()
+        if (existingUser != null) {
+            throw Exception("Nickname already exists")
+        }
+        
+        val now = Instant.now()
         Users.insert {
-            it[name] = user.name
-            it[age] = user.age
-        }[Users.id]
+            it[nickname] = userRequest.nickname
+            it[createdAt] = now
+        }
+        
+        User(userRequest.nickname, now)
     }
 
-    suspend fun read(id: Int): ExposedUser? {
-        return dbQuery {
-            Users.selectAll()
-                .where { Users.id eq id }
-                .map { ExposedUser(it[Users.name], it[Users.age]) }
-                .singleOrNull()
-        }
-    }
-
-    suspend fun update(id: Int, user: ExposedUser) {
-        dbQuery {
-            Users.update({ Users.id eq id }) {
-                it[name] = user.name
-                it[age] = user.age
-            }
-        }
-    }
-
-    suspend fun delete(id: Int) {
-        dbQuery {
-            Users.deleteWhere { Users.id.eq(id) }
-        }
+    suspend fun getAll(): List<User> = dbQuery {
+        Users.selectAll()
+            .map { User(it[Users.nickname], it[Users.createdAt]) }
     }
 
     private suspend fun <T> dbQuery(block: suspend () -> T): T =
