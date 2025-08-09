@@ -1,0 +1,38 @@
+// {
+//   "compilerOptions": {
+//     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
+//     "target": "ES2023",
+//     "lib": ["ES2023"],
+//     "module": "ESNext",
+//     "skipLibCheck": true,
+
+//     /* Bundler mode */
+//     "moduleResolution": "bundler",
+//     "allowImportingTsExtensions": true,
+//     "verbatimModuleSyntax": true,
+//     "moduleDetection": "force",
+//     "noEmit": true,
+
+//     /* Linting */
+//     "strict": true,
+//     "noUnusedLocals": true,
+//     "noUnusedParameters": true,
+//     "erasableSyntaxOnly": true,
+//     "noFallthroughCasesInSwitch": true,
+//     "noUncheckedSideEffectImports": true
+//   },
+//   "include": ["vite.config.ts"]
+// }
+
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "composite": true,
+    "lib": ["ES2023"], // 브라우저 API 필요 없음
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
+    "types": ["node", "electron"],
+    "module": "CommonJS"
+  },
+  "include": ["electron"],
+  "exclude": ["src"]
+}

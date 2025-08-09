@@ -1,0 +1,22 @@
+// {
+//   "files": [],
+//   "references": [
+//     { "path": "./tsconfig.app.json" },
+//     { "path": "./tsconfig.node.json" }
+//   ]
+// }
+
+{
+  "compilerOptions": {
+    "target": "ES2023", // 최신 JS 기능 사용
+    "moduleResolution": "Node",
+    "strict": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "noEmit": true,
+    "jsx": "react-jsx"
+  }
+}
