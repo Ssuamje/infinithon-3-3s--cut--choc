@@ -16,16 +16,13 @@ export default function App() {
   const [mirrored, setMirrored] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const attachAndPlay = async (
-    video: HTMLVideoElement,
-    stream: MediaStream
-  ) => {
+  const attachAndPlay = async (video: HTMLVideoElement, stream: MediaStream) => {
     // 1) 이전 연결 해제
     if (video.srcObject && video.srcObject !== stream) {
       (video.srcObject as MediaStream)?.getTracks().forEach((t) => t.stop());
       video.srcObject = null;
     }
-
+    
     // 2) 새 스트림 연결
     video.srcObject = stream;
 
@@ -84,7 +81,7 @@ export default function App() {
     setState("idle");
   };
 
-  // 1) 카메라 켜기 (StrictMode 이중 실행 가드)
+  // 카메라 켜기 (StrictMode 이중 실행 가드)
   useEffect(() => {
     if (startedRef.current) return;
     startedRef.current = true;
@@ -104,22 +101,10 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 2) 깜빡임 감지
-  useEffect(() => {
-    const initializeCamera = async () => {
-      await startCamera();
-      if (videoRef.current) {
-        console.log("Starting useBlinkDetector after camera initialization");
-        useBlinkDetector(videoRef.current);
-      }
-    };
-
-    initializeCamera();
-  }, []);
-
+  // 블링크 감지 훅 (비디오 레퍼런스로 동작)
   const blink = useBlinkDetector(videoRef.current);
 
-  // 3) 게임 로직
+  // 게임 로직
   const { gameState, loseHeart, resetGame, revivalProgress, revivalRequired } =
     useGameLogic(blink.blinks, blink.lastBlinkAt);
 
@@ -158,18 +143,28 @@ export default function App() {
         <div>
           State:{" "}
           <b
-            style={{ 
-              color: 
-                blink.state === "CLOSED" || blink.state === "CLOSING" ? "#ff5050" : 
-                blink.state === "OPENING" ? "#f7b731" :
-                blink.state === "OPEN" ? "#21c074" : "#999"
+            style={{
+              color:
+                blink.state === "CLOSED" || blink.state === "CLOSING"
+                  ? "#ff5050"
+                  : blink.state === "OPENING"
+                  ? "#f7b731"
+                  : blink.state === "OPEN"
+                  ? "#21c074"
+                  : "#999",
             }}
           >
-            {blink.state === "UNKNOWN" ? "대기중" :
-             blink.state === "OPEN" ? "눈뜸" :
-             blink.state === "CLOSING" ? "감는중" :
-             blink.state === "CLOSED" ? "눈감음" :
-             blink.state === "OPENING" ? "뜨는중" : blink.state}
+            {blink.state === "UNKNOWN"
+              ? "대기중"
+              : blink.state === "OPEN"
+              ? "눈뜸"
+              : blink.state === "CLOSING"
+              ? "감는중"
+              : blink.state === "CLOSED"
+              ? "눈감음"
+              : blink.state === "OPENING"
+              ? "뜨는중"
+              : blink.state}
           </b>
         </div>
         <div>
@@ -178,11 +173,31 @@ export default function App() {
         <div>
           Ratio L/R: {blink.ratioL.toFixed(3)} / {blink.ratioR.toFixed(3)}
         </div>
-        <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>
-          평균: {((blink.ratioL + blink.ratioR) / 2).toFixed(3)} 
-          | 임계값: 감음&lt;{blink.CLOSE_T} / 뜸&gt;{blink.OPEN_T}
+        <div style={{ fontSize: 11, color: "#ddd", marginTop: 4 }}>
+          평균: {((blink.ratioL + blink.ratioR) / 2).toFixed(3)} | 임계값: 감음
+          &lt;
+          {blink.CLOSE_T !== undefined ? blink.CLOSE_T.toFixed(3) : "-"}
+          {" / "}
+          뜸&gt;{blink.OPEN_T !== undefined ? blink.OPEN_T.toFixed(3) : "-"}
+          <br />
+          (최솟값:{" "}
+          {blink.minEAR !== undefined && isFinite(blink.minEAR)
+            ? blink.minEAR.toFixed(3)
+            : "-"}
+          {" / "}
+          최댓값:{" "}
+          {blink.maxEAR !== undefined && isFinite(blink.maxEAR)
+            ? blink.maxEAR.toFixed(3)
+            : "-"}
+          )
+          {blink.calibAt && (
+            <>
+              {" "}
+              | 갱신: {new Date(blink.calibAt).toLocaleTimeString()}
+            </>
+          )}
         </div>
-        <div style={{ fontSize: 12, color: '#666' }}>
+        <div style={{ fontSize: 12, color: "#ccc" }}>
           완전한 깜빡임 사이클 감지 (뜸→감음→뜸)
         </div>
         <label style={styles.checkbox}>
@@ -215,7 +230,9 @@ export default function App() {
           muted
           autoPlay
         />
-        {!ready && !error && <div style={styles.overlay}>카메라 준비 중…</div>}
+        {!ready && !error && (
+          <div style={styles.overlay}>카메라 준비 중…</div>
+        )}
         {error && <div style={styles.overlay}>에러: {error}</div>}
       </div>
 
@@ -242,6 +259,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: "#5e5e5e",
     padding: 10,
     borderRadius: 10,
+    color: "#fff",
   },
   checkbox: { display: "flex", alignItems: "center", gap: 6 },
   videoBox: {
@@ -265,4 +283,20 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 18,
   },
   tip: { color: "#666", marginTop: 10 },
+  button: {
+    background: "#21c074",
+    color: "#fff",
+    border: "none",
+    padding: "6px 12px",
+    borderRadius: 8,
+    cursor: "pointer",
+  },
+  buttonSecondary: {
+    background: "#444",
+    color: "#fff",
+    border: "none",
+    padding: "6px 12px",
+    borderRadius: 8,
+    cursor: "pointer",
+  },
 };
