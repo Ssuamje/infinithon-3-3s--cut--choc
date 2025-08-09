@@ -68,11 +68,11 @@ export function useBlinkDetector(videoEl: HTMLVideoElement | null) {
   const lastDetectedRatioRef = useRef<number>(0);
 
   // 깜빡임 감지를 위한 임계값들 - 더 관대하게 조정
-  const CLOSE_T = 0.12;   // 감음 판단 임계값 (더 낮게)
-  const OPEN_T = 0.15;    // 뜸 판단 임계값 (더 낮게)
+  const CLOSE_T = 0.20;   // 감음 판단 임계값 (더 낮게)
+  const OPEN_T = 0.50;    // 뜸 판단 임계값 (더 낮게)
   const MIN_STATE_DURATION = 30;    // 상태 변경 최소 지속시간 (ms) - 더 짧게
   const MIN_CONSECUTIVE_FRAMES = 1; // 상태 변경을 위한 최소 연속 프레임 수 - 더 관대하게
-  const NO_FACE_TIMEOUT = 1000;     // 얼굴 감지 실패 후 리셋 시간 (ms)
+  const NO_FACE_TIMEOUT = 3000;     // 얼굴 감지 실패 후 리셋 시간 (ms)
 
   // FaceMesh 초기화
   const initMesh = useMemo(
@@ -107,9 +107,15 @@ export function useBlinkDetector(videoEl: HTMLVideoElement | null) {
       await initMesh();
       if (!meshRef.current) return;
 
-      meshRef.current.onResults((results: {multiFaceLandmarks?: {x: number, y: number}[][]}) => {
-        const now = Date.now();
+      meshRef.current.onResults((results: { multiFaceLandmarks?: { x: number, y: number }[][] }) => {
         const lm = results.multiFaceLandmarks?.[0];
+        if (!lm) {
+          console.warn("No landmarks detected");
+        } else {
+          console.log("Landmarks detected:", lm);
+        }
+
+        const now = Date.now();
         
         // 얼굴이 감지되지 않은 경우
         if (!lm) {
@@ -165,45 +171,26 @@ export function useBlinkDetector(videoEl: HTMLVideoElement | null) {
 
         switch (currentState) {
           case "UNKNOWN":
-            // 초기 상태는 즉시 전환 - 얼굴이 감지되면 바로 상태 결정
-            console.log(`UNKNOWN -> 평균: ${avgRatio.toFixed(3)}, OPEN_T: ${OPEN_T}, CLOSE_T: ${CLOSE_T}`);
+            // 얼굴이 감지되면 바로 OPEN 또는 CLOSED로 전환
             if (avgRatio > OPEN_T) {
-              console.log(`UNKNOWN -> OPEN 전환 (${avgRatio.toFixed(3)} > ${OPEN_T})`);
               newState = "OPEN";
             } else if (avgRatio < CLOSE_T) {
-              console.log(`UNKNOWN -> CLOSED 전환 (${avgRatio.toFixed(3)} < ${CLOSE_T})`);
               newState = "CLOSED";
-            } else {
-              console.log(`UNKNOWN 유지 (${CLOSE_T} <= ${avgRatio.toFixed(3)} <= ${OPEN_T})`);
             }
             break;
-            
+
           case "OPEN":
+            // 감긴 상태로 바로 전환
             if (canChangeState && avgRatio < CLOSE_T) {
-              newState = "CLOSING";
+              newState = "CLOSED";
             }
             break;
-            
-          case "CLOSING":
-            if (canChangeState) {
-              if (avgRatio < CLOSE_T * 0.8) { // 더 확실히 감긴 상태
-                newState = "CLOSED";
-              } else if (avgRatio > OPEN_T) { // 다시 뜨는 경우
-                newState = "OPENING";
-              }
-            }
-            break;
-            
+
           case "CLOSED":
-            if (canChangeState && avgRatio > CLOSE_T) {
-              newState = "OPENING";
-            }
-            break;
-            
-          case "OPENING":
+            // 뜬 상태로 바로 전환
             if (canChangeState && avgRatio > OPEN_T) {
               newState = "OPEN";
-              // 완전한 깜빡임 사이클 완료!
+              // 완전한 깜빡임 사이클 완료
               blinksRef.current += 1;
               lastBlinkAtRef.current = now;
             }
