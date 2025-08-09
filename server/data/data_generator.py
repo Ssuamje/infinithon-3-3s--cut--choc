@@ -25,7 +25,7 @@ PERSONA_NAMES = [
     "stable",
     "month",
     "week",
-    "firsrt"
+    "first"
 ]
 
 TODAY = "2025-08-10"
@@ -53,8 +53,11 @@ def generate_blink_data(persona_index, blink_rate: float, day=TODAY, start_hour=
     for blink_id in range(total_blinks):
         if timestamp < start_timestamp.replace(hour=end_hour, minute=0, second=0, microsecond=0):
             blink_interval = 60 / blink_rate + np.random.uniform(-0.5, 0.5) # Randomize the blink interval slightly
-            timestamp = start_timestamp + pd.Timedelta(seconds=blink_id * blink_interval)
-            data.append(f"{timestamp.isoformat()}")
+            timestamp += pd.Timedelta(seconds=blink_interval)
+            data.append(f"{timestamp.strftime('%Y-%m-%dT%H:%M:%S')}")
+    while timestamp < start_timestamp.replace(hour=end_hour, minute=0, second=0, microsecond=0):
+        timestamp += pd.Timedelta(seconds = 60 / blink_rate)  # Fill in the remaining time with regular blinks
+        data.append(f"{timestamp.strftime('%Y-%m-%dT%H:%M:%S')}")
     return data
 
 def generate_blink_data_for_all_personas():
@@ -66,12 +69,12 @@ def generate_blink_data_for_all_personas():
     all_persona_data = {}
     for index, (persona, name) in enumerate(zip(PERSONAS, PERSONA_NAMES)):
         cur_date = datetime.strptime(TODAY, "%Y-%m-%d")
+        all_persona_data[name] = []
         for week, blink_rate in enumerate(persona[::-1]):
             for _ in range(7):  # Generate data for 7 days
-                if cur_date.weekday() >= 5:  # 5 = Saturday, 6 = Sunday
-                    cur_date -= pd.Timedelta(days=1)
-                    continue
                 cur_date -= pd.Timedelta(days=1)
+                if cur_date.weekday() >= 5:  # 5 = Saturday, 6 = Sunday
+                    continue
                 data = generate_blink_data(index, blink_rate, cur_date.strftime("%Y-%m-%d"), start_hour=9, end_hour=17)
                 all_persona_data[name] = data + all_persona_data.get(name, [])
     return all_persona_data
