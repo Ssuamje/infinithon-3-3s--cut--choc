@@ -7,7 +7,7 @@ import { GameUI } from "./GameUI";
 import { VideoDisplay } from "./components/VideoDisplay";
 import { ControlPanel } from "./components/ControlPanel";
 import { useState, useEffect } from "react";
-import { useMicVAD } from "./hooks/useMicVAD";
+// import { useMicVAD } from "./hooks/useMicVAD";
 
 export default function App() {
   // 카메라 관련 로직
@@ -41,7 +41,7 @@ export default function App() {
     useGameLogic(blink.blinks, blink.lastBlinkAt);
 
   // 🎤 VAD 상태 (표시용)
-  const vad = useMicVAD(true);
+  // const vad = useMicVAD(true);
   
   // 투명도 변경 이벤트 리스너
   useEffect(() => {
@@ -105,14 +105,14 @@ export default function App() {
   return (
     <div style={styles.wrap}>
       {/* === VAD 상태 (임시 표시) === */}
-      <div style={{ fontSize: 12, marginBottom: 8 }}>
+      {/* <div style={{ fontSize: 12, marginBottom: 8 }}>
         VAD: {vad.connected ? "● CONNECTED" : "○ DISCONNECTED"}
         {" | "}inSpeech: {vad.inSpeech ? "YES" : "no"}
         {" | "}p={vad.lastProb.toFixed(3)}
         {vad.error && (
           <span style={{ color: "red" }}>{" | "}{vad.error}</span>
         )}
-      </div>
+      </div> */}
 
       {/* 디버깅용 로그 (개발 중에만 표시) */}
       {process.env.NODE_ENV === "development" && (
