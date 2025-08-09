@@ -6,17 +6,20 @@ interface BlinkWarningOverlayProps {
   isVisible: boolean;
   progress: number; // 0-100%
   timeWithoutBlink: number; // milliseconds
+  overlayTimeRemaining: number; // 오버레이 시간 (milliseconds)
   combo?: number;
   score?: number;
+  blinkCount?: number; // 깜빡임 횟수 추가
+  blinkThreshold?: number; // 눈물 복구에 필요한 깜빡임 횟수 추가
 }
 
 // 애니메이션
 const pulseWarning = keyframes`
-  0%, 100% { 
+  0%, 100% {
     background-color: rgba(255, 107, 53, 0.9);
     border-color: rgba(255, 107, 53, 0.8);
   }
-  50% { 
+  50% {
     background-color: rgba(255, 80, 80, 0.95);
     border-color: rgba(255, 80, 80, 0.9);
   }
@@ -33,11 +36,6 @@ const slideDown = keyframes`
   }
 `;
 
-const progressFill = keyframes`
-  from { width: 0%; }
-  to { width: 100%; }
-`;
-
 // 스타일 컴포넌트
 const OverlayContainer = styled.div<{ $isVisible: boolean }>`
   position: fixed;
@@ -46,30 +44,34 @@ const OverlayContainer = styled.div<{ $isVisible: boolean }>`
   transform: translateX(-50%);
   z-index: 9999;
   pointer-events: none;
-  
+
   visibility: ${({ $isVisible }) => ($isVisible ? "visible" : "hidden")};
   opacity: ${({ $isVisible }) => ($isVisible ? 1 : 0)};
   animation: ${({ $isVisible }) =>
     $isVisible
-      ? css`${slideDown} 0.3s ease-out`
+      ? css`
+          ${slideDown} 0.3s ease-out
+        `
       : "none"};
   transition: opacity 0.3s ease, visibility 0.3s ease;
 `;
 
 const CompactHUD = styled.div<{ $isWarning: boolean }>`
-  background: linear-gradient(135deg, rgba(249, 115, 22, 0.95), rgba(234, 88, 12, 0.9));
+  background: linear-gradient(
+    135deg,
+    rgba(249, 115, 22, 0.95),
+    rgba(234, 88, 12, 0.9)
+  );
   backdrop-filter: blur(20px);
   border: 2px solid rgba(255, 107, 53, 0.8);
   border-radius: 16px;
   padding: 12px 16px;
   min-width: 280px;
   max-width: 400px;
-  
-  box-shadow: 
-    0 8px 32px rgba(0, 0, 0, 0.15),
-    0 4px 16px rgba(249, 115, 22, 0.3),
+
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15), 0 4px 16px rgba(249, 115, 22, 0.3),
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
-  
+
   ${({ $isWarning }) =>
     $isWarning &&
     css`
@@ -147,31 +149,84 @@ export const BlinkWarningOverlay: React.FC<BlinkWarningOverlayProps> = ({
   isVisible,
   progress,
   timeWithoutBlink,
+  overlayTimeRemaining,
   combo = 0,
   score = 0,
+  blinkCount = 0,
+  blinkThreshold = 5,
 }) => {
   const secondsWithoutBlink = Math.floor(timeWithoutBlink / 1000);
+  const overlaySecondsRemaining = Math.floor(overlayTimeRemaining / 1000);
   const isWarning = progress >= 100;
+  const blinkProgress = (blinkCount / blinkThreshold) * 100; // 깜빡임 게이지
+  const remainingTime = Math.max(0, 5 - secondsWithoutBlink); // 남은 시간
+
+  // 디버깅용 로그
+  console.log("BlinkWarningOverlay render:", {
+    isVisible,
+    progress: progress.toFixed(2),
+    timeWithoutBlink,
+    secondsWithoutBlink,
+    overlayTimeRemaining,
+    overlaySecondsRemaining,
+    remainingTime,
+    isWarning,
+    blinkCount,
+    blinkProgress: blinkProgress.toFixed(2),
+    timestamp: new Date().toISOString(),
+  });
 
   return (
     <OverlayContainer $isVisible={isVisible}>
       <CompactHUD $isWarning={isWarning}>
         <Header>
           <WarningIcon>
-            {isWarning ? "⚠️" : "👁️"}
+            {isWarning ? "💧" : "💦"}
             <WarningText>
-              {isWarning ? "깜빡여 주세요!" : "눈깜빡임 모니터링"}
+              {isWarning ? "눈물을 잃었습니다!" : "눈물 복구 중..."}
             </WarningText>
           </WarningIcon>
           <TimeDisplay>
-            {secondsWithoutBlink}초
+            {overlaySecondsRemaining}초 남음 ({secondsWithoutBlink}s 경과)
           </TimeDisplay>
         </Header>
-        
-        <ProgressContainer>
-          <ProgressBar $progress={progress} />
-        </ProgressContainer>
-        
+
+        {/* 깜빡임 게이지 */}
+        <div style={{ marginBottom: "8px" }}>
+          <div
+            style={{
+              fontSize: "10px",
+              color: "rgba(255, 255, 255, 0.9)",
+              marginBottom: "4px",
+
+              textAlign: "center",
+            }}
+          >
+            깜빡임: {blinkCount}/{blinkThreshold}
+          </div>
+          <ProgressContainer>
+            <ProgressBar $progress={blinkProgress} />
+          </ProgressContainer>
+        </div>
+
+        {/* 시간 게이지 */}
+        <div style={{ marginBottom: "8px" }}>
+          <div
+            style={{
+              fontSize: "10px",
+              color: "rgba(255, 255, 255, 0.9)",
+              marginBottom: "4px",
+              textAlign: "center",
+            }}
+          >
+            시간 제한: {overlaySecondsRemaining}초 (진행률:{" "}
+            {progress.toFixed(1)}%)
+          </div>
+          <ProgressContainer>
+            <ProgressBar $progress={progress} />
+          </ProgressContainer>
+        </div>
+
         <StatsRow>
           <StatItem>
             🔥 콤보: <StatValue>{combo}</StatValue>
@@ -180,6 +235,21 @@ export const BlinkWarningOverlay: React.FC<BlinkWarningOverlayProps> = ({
             🏆 점수: <StatValue>{score.toLocaleString()}</StatValue>
           </StatItem>
         </StatsRow>
+
+        {/* 눈물 복구 안내 메시지 */}
+        <div
+          style={{
+            marginTop: "8px",
+            fontSize: "10px",
+            color: "rgba(255, 255, 255, 0.9)",
+            textAlign: "center",
+            fontStyle: "italic",
+          }}
+        >
+          {isWarning
+            ? "시간 내에 5번 깜빡여서 눈물을 복구하세요!"
+            : `${blinkThreshold - blinkCount}번 더 깜빡이면 눈물이 복구됩니다!`}
+        </div>
       </CompactHUD>
     </OverlayContainer>
   );

@@ -8,9 +8,11 @@ export interface GameState {
   isAlive: boolean;
   lastComboTime: number | null;
   gamePhase: "idle" | "warning" | "danger" | "fever";
-  timeRemaining: number;
+  timeRemaining: number; // 게임 시간 (깜빡임으로 연장되는 시간)
+  overlayTimeRemaining: number; // 오버레이 시간 (하트 복구용)
   countdown: number | null;
   isPaused: boolean;
+  hasShownOverlay: boolean; // 오버레이를 이미 보여줬는지 여부
 }
 
 export function useGameLogic(
@@ -24,22 +26,30 @@ export function useGameLogic(
     isAlive: true,
     lastComboTime: null,
     gamePhase: "idle",
-    timeRemaining: 6000, // 6초
+    timeRemaining: 6000, // 6초 (게임 시간)
+    overlayTimeRemaining: 0, // 오버레이 시간 (초기값 0)
     countdown: null,
     isPaused: false,
+    hasShownOverlay: false, // 오버레이를 아직 보여주지 않음
   });
 
   const prevBlinksRef = useRef(0);
   const comboTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const gameTimerRef = useRef<NodeJS.Timeout | null>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
+  const overlayTimerRef = useRef<NodeJS.Timeout | null>(null); // 오버레이 타이머
 
   // 게임 상수
   const GAME_DURATION = 6000; // 6초
+  const OVERLAY_DURATION = 5000; // 5초 (오버레이 시간)
   const WARNING_THRESHOLD = 3000; // 3초 (경고 시작)
   const DANGER_THRESHOLD = 1000; // 1초 (위험)
   const COMBO_TIMEOUT = 3000; // 콤보 타임아웃 3초
   const FEVER_THRESHOLD = 15; // 피버 시작 콤보
+
+  // 오버레이 상태 계산 (시간이 0이 되고 오버레이 시간이 남아있을 때만 활성)
+  const isOverlayActive =
+    gameState.timeRemaining <= 0 && gameState.overlayTimeRemaining > 0;
 
   // 게임 일시정지/재개
   const togglePause = () => {
@@ -56,8 +66,10 @@ export function useGameLogic(
       lastComboTime: null,
       gamePhase: "idle",
       timeRemaining: GAME_DURATION,
+      overlayTimeRemaining: 0,
       countdown: null,
       isPaused: false,
+      hasShownOverlay: false,
     });
     prevBlinksRef.current = 0;
 
@@ -65,6 +77,7 @@ export function useGameLogic(
     if (comboTimeoutRef.current) clearTimeout(comboTimeoutRef.current);
     if (gameTimerRef.current) clearTimeout(gameTimerRef.current);
     if (countdownRef.current) clearTimeout(countdownRef.current);
+    if (overlayTimerRef.current) clearInterval(overlayTimerRef.current);
   };
 
   // 하트 감소
@@ -76,21 +89,81 @@ export function useGameLogic(
         hearts: newHearts,
         isAlive: newHearts > 0,
         combo: 0,
-        timeRemaining: GAME_DURATION,
         gamePhase: "idle",
         countdown: null,
+        hasShownOverlay: false, // 하트 감소 시 오버레이 상태 리셋
       };
     });
   };
 
-  // 게임 타이머 관리
+  // 하트 복구 (눈물 복구용)
+  const restoreHeart = () => {
+    setGameState((prev) => {
+      const newHearts = Math.min(3, prev.hearts + 1);
+      return {
+        ...prev,
+        hearts: newHearts,
+        isAlive: newHearts > 0,
+        overlayTimeRemaining: 0, // 오버레이 시간 종료
+        gamePhase: "idle",
+        countdown: null,
+        hasShownOverlay: false, // 오버레이 상태 리셋
+      };
+    });
+  };
+
+  // 오버레이 타이머 관리 (하트 복구 시간)
   useEffect(() => {
-    if (gameState.isPaused || !gameState.isAlive) return;
+    if (gameState.overlayTimeRemaining > 0) {
+      // 오버레이 타이머 시작
+      overlayTimerRef.current = setInterval(() => {
+        setGameState((prev) => {
+          if (prev.overlayTimeRemaining <= 0) {
+            return prev;
+          }
+
+          const newOverlayTime = Math.max(0, prev.overlayTimeRemaining - 100);
+
+          // 오버레이 시간이 0이 되면 오버레이 종료
+          if (newOverlayTime === 0) {
+            return {
+              ...prev,
+              overlayTimeRemaining: 0,
+              hasShownOverlay: false, // 오버레이 종료 시 플래그 리셋
+              timeRemaining: GAME_DURATION, // 게임 시간 리셋
+              gamePhase: "idle",
+              countdown: null,
+            };
+          }
+
+          return {
+            ...prev,
+            overlayTimeRemaining: newOverlayTime,
+          };
+        });
+      }, 100);
+    } else {
+      // 오버레이 타이머 정리
+      if (overlayTimerRef.current) {
+        clearInterval(overlayTimerRef.current);
+        overlayTimerRef.current = null;
+      }
+    }
+
+    return () => {
+      if (overlayTimerRef.current) {
+        clearInterval(overlayTimerRef.current);
+      }
+    };
+  }, [gameState.overlayTimeRemaining]);
+
+  // 게임 타이머 관리 (오버레이가 활성일 때는 완전 정지)
+  useEffect(() => {
+    if (gameState.isPaused || !gameState.isAlive || isOverlayActive) return;
 
     const updateTimer = () => {
       setGameState((prev) => {
         if (prev.timeRemaining <= 0) {
-          // 시간 초과 - 하트 감소
           return prev;
         }
 
@@ -101,7 +174,6 @@ export function useGameLogic(
         // 게임 페이즈 결정
         if (newTimeRemaining <= DANGER_THRESHOLD) {
           newPhase = "danger";
-          // 3-2-1 카운트다운 시작
           if (prev.countdown === null) {
             newCountdown = 3;
           }
@@ -126,11 +198,16 @@ export function useGameLogic(
     return () => {
       if (gameTimerRef.current) clearInterval(gameTimerRef.current);
     };
-  }, [gameState.isPaused, gameState.isAlive]);
+  }, [gameState.isPaused, gameState.isAlive, isOverlayActive]);
 
   // 카운트다운 관리
   useEffect(() => {
-    if (gameState.countdown === null || gameState.countdown <= 0) return;
+    if (
+      gameState.countdown === null ||
+      gameState.countdown <= 0 ||
+      isOverlayActive
+    )
+      return;
 
     countdownRef.current = setTimeout(() => {
       setGameState((prev) => ({
@@ -142,11 +219,11 @@ export function useGameLogic(
     return () => {
       if (countdownRef.current) clearTimeout(countdownRef.current);
     };
-  }, [gameState.countdown]);
+  }, [gameState.countdown, isOverlayActive]);
 
-  // 깜빡임 감지 및 콤보 처리
+  // 깜빡임 감지 및 콤보 처리 (오버레이 중에도 동작)
   useEffect(() => {
-    if (gameState.isPaused) return;
+    if (gameState.isPaused) return; // 오버레이 중에도 깜빡임 처리 허용
 
     // 새로운 깜빡임이 감지되었을 때
     if (currentBlinks > prevBlinksRef.current && lastBlinkAt) {
@@ -167,10 +244,8 @@ export function useGameLogic(
             : COMBO_TIMEOUT + 1;
 
           if (timeSinceLastCombo <= COMBO_TIMEOUT) {
-            // 콤보 유지
             newCombo = prev.combo + newBlinks;
           } else {
-            // 새로운 콤보 시작
             newCombo = newBlinks;
           }
 
@@ -178,19 +253,20 @@ export function useGameLogic(
           const comboMultiplier = Math.floor(newCombo / 5) + 1;
           newScore = prev.score + newBlinks * 10 * comboMultiplier;
 
-          // 시간 연장 (깜빡임마다 1초씩)
-          newTimeRemaining = Math.min(GAME_DURATION, prev.timeRemaining + 1000);
+          // 오버레이 중이 아닐 때만 시간 리셋
+          if (!isOverlayActive) {
+            newTimeRemaining = GAME_DURATION;
 
-          // 게임 페이즈 재계산
-          if (newTimeRemaining <= DANGER_THRESHOLD) {
-            newPhase = "danger";
-            newCountdown = 3;
-          } else if (newTimeRemaining <= WARNING_THRESHOLD) {
-            newPhase = "warning";
-            newCountdown = null;
-          } else {
-            newPhase = "idle";
-            newCountdown = null;
+            if (newTimeRemaining <= DANGER_THRESHOLD) {
+              newPhase = "danger";
+              newCountdown = 3;
+            } else if (newTimeRemaining <= WARNING_THRESHOLD) {
+              newPhase = "warning";
+              newCountdown = null;
+            } else {
+              newPhase = "idle";
+              newCountdown = null;
+            }
           }
         }
 
@@ -222,14 +298,34 @@ export function useGameLogic(
 
       prevBlinksRef.current = currentBlinks;
     }
-  }, [currentBlinks, lastBlinkAt, gameState.isAlive, gameState.isPaused]);
+  }, [
+    currentBlinks,
+    lastBlinkAt,
+    gameState.isAlive,
+    gameState.isPaused,
+    isOverlayActive,
+  ]);
 
-  // 시간 초과 시 하트 감소
+  // 시간 초과 시 오버레이 시작
   useEffect(() => {
-    if (gameState.timeRemaining <= 0 && gameState.isAlive) {
-      loseHeart();
+    if (
+      gameState.timeRemaining <= 0 &&
+      gameState.isAlive &&
+      gameState.overlayTimeRemaining === 0 &&
+      !gameState.hasShownOverlay
+    ) {
+      setGameState((prev) => ({
+        ...prev,
+        overlayTimeRemaining: OVERLAY_DURATION,
+        hasShownOverlay: true, // 오버레이 시작 시 플래그 설정
+      }));
     }
-  }, [gameState.timeRemaining, gameState.isAlive]);
+  }, [
+    gameState.timeRemaining,
+    gameState.isAlive,
+    gameState.overlayTimeRemaining,
+    gameState.hasShownOverlay,
+  ]);
 
   // 피버 모드 체크
   useEffect(() => {
@@ -256,5 +352,6 @@ export function useGameLogic(
     loseHeart,
     resetGame,
     togglePause,
+    restoreHeart,
   };
 }

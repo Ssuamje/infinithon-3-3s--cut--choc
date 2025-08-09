@@ -7,7 +7,7 @@ import { GameUI } from "./GameUI";
 import { VideoDisplay } from "./components/VideoDisplay";
 import { ControlPanel } from "./components/ControlPanel";
 import { BlinkWarningOverlay } from "./components/BlinkWarningOverlay";
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
 
 export default function App() {
   // 카메라 관련 로직
@@ -33,14 +33,44 @@ export default function App() {
   // 깜빡임 감지
   const blink = useBlinkDetector(videoRef);
 
-  // 게임 로직
-  const { gameState, resetGame, togglePause } = useGameLogic(
-    blink.blinks,
-    blink.lastBlinkAt
+  // 게임 로직을 먼저 호출
+  const { gameState, resetGame, togglePause, restoreHeart, loseHeart } =
+    useGameLogic(blink.blinks, blink.lastBlinkAt); // 하트 수 파라미터 제거
+
+  // 깜빡임 타이머 완료 콜백
+  const handleBlinkTimerComplete = useCallback(
+    (success: boolean, blinkCount: number) => {
+      if (success) {
+        // 5초 안에 5번 깜빡임 성공: 눈물 복구
+        console.log(`🎉 눈물 복구 성공! ${blinkCount}번 깜빡임`);
+        restoreHeart(); // 하트 복구
+      } else {
+        // 5초 안에 5번 못 채움: 눈물 1개 추가 손실
+        console.log(`💔 눈물 복구 실패! ${blinkCount}번만 깜빡임`);
+        loseHeart(); // 하트 1개 감소
+      }
+    },
+    [restoreHeart, loseHeart]
   );
 
-  // 깜빡임 타이머 (6초)
-  const blinkTimer = useBlinkTimer(blink.lastBlinkAt, 6000);
+  // 깜빡임 타이머 (5초, 5번 깜빡임으로 눈물 복구)
+  const blinkTimer = useBlinkTimer(
+    blink.lastBlinkAt,
+    5000, // 5초로 변경
+    gameState.hearts, // 이제 gameState가 정의된 후에 사용
+    5,
+    handleBlinkTimerComplete,
+    gameState.overlayTimeRemaining // 오버레이 시간 전달
+  );
+
+  // 오버레이 활성 상태 계산
+  const isOverlayActive =
+    gameState.timeRemaining <= 0 && gameState.overlayTimeRemaining > 0;
+
+  // 오버레이 상태가 변경될 때마다 게임 로직 업데이트
+  useEffect(() => {
+    // 이 부분은 useGameLogic 내부에서 처리되므로 별도 로직 불필요
+  }, [isOverlayActive]);
 
   const isBlinking = blink.state === "CLOSED" || blink.state === "CLOSING";
 
@@ -75,14 +105,85 @@ export default function App() {
 
   return (
     <div style={styles.wrap}>
-      {/* 깜빡임 경고 오버레이 - 모든 창 위에 표시 */}
+      {/* 깜빡임 경고 오버레이 - 하트를 잃었을 때만 표시하고, 완료되면 숨김 */}
       <BlinkWarningOverlay
-        isVisible={blinkTimer.progress > 50 || blinkTimer.isWarning} // 50% 이후부터 표시
+        isVisible={(() => {
+          const timeCondition = gameState.timeRemaining <= 0;
+          const overlayTimeCondition = gameState.overlayTimeRemaining > 0;
+
+          console.log("🔍 오버레이 표시 조건:", {
+            timeRemaining: gameState.timeRemaining,
+            timeCondition,
+            overlayTimeRemaining: gameState.overlayTimeRemaining,
+            overlayTimeCondition,
+            finalResult: timeCondition && overlayTimeCondition,
+          });
+
+          return timeCondition && overlayTimeCondition;
+        })()}
         progress={blinkTimer.progress}
         timeWithoutBlink={blinkTimer.timeWithoutBlink}
+        overlayTimeRemaining={gameState.overlayTimeRemaining} // 오버레이 시간 추가
         combo={gameState.combo}
         score={gameState.score}
+        blinkCount={blinkTimer.blinkCount}
+        blinkThreshold={5}
       />
+
+      {/* 디버깅용 로그 (개발 중에만 표시) */}
+      {process.env.NODE_ENV === "development" && (
+        <div
+          style={{
+            position: "fixed",
+            top: "10px",
+            right: "10px",
+            background: "rgba(0,0,0,0.8)",
+            color: "white",
+            padding: "8px",
+            fontSize: "12px",
+            zIndex: 10000,
+            fontFamily: "monospace",
+          }}
+        >
+          <div>Hearts: {gameState.hearts}/3</div>
+          <div>
+            Overlay Visible:{" "}
+            {gameState.hearts < 3 && gameState.overlayTimeRemaining > 0
+              ? "Yes"
+              : "No"}
+          </div>
+          <div>Blink Count: {blinkTimer.blinkCount}/5</div>
+          <div>Is Completed: {blinkTimer.isCompleted ? "Yes" : "No"}</div>
+          <div>BlinkTimer Progress: {blinkTimer.progress.toFixed(1)}%</div>
+          <div>Is Warning: {blinkTimer.isWarning ? "Yes" : "No"}</div>
+          <div>
+            Overlay Time: {Math.floor(gameState.overlayTimeRemaining / 1000)}s
+          </div>
+          <div>Game Time: {Math.floor(gameState.timeRemaining / 1000)}s</div>
+          <div>Raw Overlay Time: {gameState.overlayTimeRemaining}ms</div>
+          <div>Raw Game Time: {gameState.timeRemaining}ms</div>
+          <div>Last Blink: {blink.lastBlinkAt ? "Yes" : "No"}</div>
+          <div>
+            Challenge Start:{" "}
+            {blinkTimer.timeWithoutBlink > 0 ? "Active" : "Inactive"}
+          </div>
+          <div>Current Time: {new Date().toLocaleTimeString()}</div>
+          <div>
+            Last Blink Time:{" "}
+            {blink.lastBlinkAt
+              ? new Date(blink.lastBlinkAt).toLocaleTimeString()
+              : "None"}
+          </div>
+          <div>
+            Timer State: {blinkTimer.isCompleted ? "Completed" : "Running"}
+          </div>
+          <div>
+            Overlay Condition: Hearts &lt; 3:{" "}
+            {gameState.hearts < 3 ? "Yes" : "No"}, Not Completed:{" "}
+            {!blinkTimer.isCompleted ? "Yes" : "No"}
+          </div>
+        </div>
+      )}
 
       {/* 게임 UI - 항상 표시 */}
       <GameUI
