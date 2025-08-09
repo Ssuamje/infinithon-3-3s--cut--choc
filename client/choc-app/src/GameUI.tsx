@@ -178,7 +178,7 @@ const feverGlow = keyframes`
   }
   50% {
     box-shadow: 0 0 30px rgba(139, 92, 246, 0.8);
-    transform: scale(1.2);
+    transform: scale(1.1);
   }
 `;
 
@@ -205,12 +205,13 @@ const Container = styled.div`
   /* 전체 영역을 드래그 가능하게 설정 */
   -webkit-app-region: drag;
   user-select: none;
+  /* overflow: hidden; */
 `;
 
 // StatusBar를 원래대로 되돌리고 피버 모드만 특별한 테두리 효과 추가
 const StatusBar = styled.div<{ $gamePhase: string }>`
   position: relative;
-  width: clamp(300px, 85vw, 600px);
+  width: clamp(300px, 80vw, 600px);
   margin: 0 auto;
   padding: clamp(12px, 2.5vw, 16px) clamp(16px, 4vw, 24px);
   border-radius: clamp(16px, 4vw, 24px);
@@ -255,9 +256,9 @@ const StatusBar = styled.div<{ $gamePhase: string }>`
       background: rgba(139, 92, 246, 0.15);
       border-color: rgba(139, 92, 246, 0.4);
       border-width: 2px; /* 테두리 두께 증가 */
-      box-shadow: 0 0 20px rgba(139, 92, 246, 0.6); /* 보라색 글로우 효과 */
-      animation: ${gentlePulse} 3s ease-in-out infinite,
-        ${fadeInUp} 0.6s ease-out;
+      box-shadow: 0 0 20px rgba(139, 92, 246, 0.6);
+      animation: ${gentlePulse} 0.5s ease-in-out infinite,
+        ${fadeInUp} 0.5s ease-out;
     `}
 `;
 
@@ -364,8 +365,8 @@ const StatusDot = styled.div<{ $gamePhase: string }>`
     $gamePhase === "fever" &&
     css`
       background: linear-gradient(135deg, #8b5cf6, #6366f1);
-      animation: ${feverGlow} 1s ease-in-out infinite;
-      box-shadow: 0 0 20px rgba(139, 92, 246, 0.6);
+      animation: ${feverGlow} 0.5s ease-in-out infinite;
+      box-shadow: 0 0 2px rgba(139, 92, 246, 0.6);
     `}
 `;
 
@@ -535,26 +536,28 @@ const GameOverlay = styled.div`
 `;
 
 const GameOverContent = styled.div`
-  background: white;
-  padding: clamp(12px, 3vw, 16px); /* 24px에서 12px로 줄임 */
-  border-radius: clamp(12px, 3vw, 16px); /* 16px에서 12px로 줄임 */
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  padding: clamp(8px, 2vw, 12px); /* 더 작게 */
+  border-radius: clamp(8px, 2vw, 12px); /* 더 작게 */
   text-align: center;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3); /* 그림자 줄임 */
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
   animation: ${fadeInUp} 0.4s ease-out;
-  max-width: 300px; /* 400px에서 300px로 줄임 */
-  width: 80vw; /* 90vw에서 80vw로 줄임 */
+  max-width: 200px; /* 더 작게 */
+  width: 60vw; /* 더 작게 */
+  border: 1px solid rgba(255, 255, 255, 0.3);
 `;
 
 const GameOverTitle = styled.h2`
-  margin: 0 0 8px; /* 16px에서 8px로 줄임 */
+  margin: 0 0 6px; /* 더 작게 */
   color: #ef4444;
-  font-size: clamp(16px, 4vw, 20px); /* 20px에서 16px로 줄임 */
+  font-size: clamp(12px, 3vw, 16px); /* 더 작게 */
   font-weight: 700;
 `;
 
 const GameOverScore = styled.p`
-  margin: 0 0 12px; /* 24px에서 12px로 줄임 */
-  font-size: clamp(12px, 3vw, 14px); /* 14px에서 12px로 줄임 */
+  margin: 0 0 8px; /* 더 작게 */
+  font-size: clamp(10px, 2.5vw, 12px); /* 더 작게 */
   color: #6b7280;
   font-weight: 500;
 `;
@@ -563,18 +566,18 @@ const RestartButton = styled.button`
   background: linear-gradient(135deg, #10b981, #059669);
   color: white;
   border: none;
-  padding: clamp(8px, 2vw, 10px) clamp(16px, 4vw, 20px); /* 패딩 줄임 */
-  border-radius: clamp(6px, 1.5vw, 8px); /* 8px에서 6px로 줄임 */
-  font-size: clamp(12px, 3vw, 14px); /* 14px에서 12px로 줄임 */
+  padding: clamp(6px, 1.5vw, 8px) clamp(12px, 3vw, 16px); /* 더 작게 */
+  border-radius: clamp(4px, 1vw, 6px); /* 더 작게 */
+  font-size: clamp(10px, 2.5vw, 12px); /* 더 작게 */
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 3px 8px rgba(16, 185, 129, 0.3); /* 그림자 줄임 */
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3); /* 더 작게 */
 
   &:hover {
     background: linear-gradient(135deg, #059669, #047857);
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+    box-shadow: 0 3px 8px rgba(16, 185, 129, 0.4);
   }
 
   &:active {
