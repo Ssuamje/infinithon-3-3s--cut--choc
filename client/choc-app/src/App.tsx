@@ -9,7 +9,11 @@ import { ControlPanel } from "./components/ControlPanel";
 import { BlinkWarningOverlay } from "./components/BlinkWarningOverlay";
 import { WarningWindow } from "./components/WarningWindow";
 import { BackgroundWarningPopup } from "./components/BackgroundWarningPopup";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import openEyeSound from "../assets/open_eye.wav";
+
+
+type ButPhase = "idle" | "needLongClose" | "waitCloseAfterOpen";
 
 export default function App() {
   // 경고 창 모드인지 확인 (URL 해시로 구분)
@@ -134,6 +138,99 @@ export default function App() {
     }
   };
 
+  // ===== BUT 측정 상태 =====
+  const [isMeasuringBUT, setIsMeasuringBUT] = useState(false);
+  const [butPhase, setButPhase] = useState<ButPhase>("idle");
+  const longCloseStartRef = useRef<number | null>(null);
+  const openStartRef = useRef<number | null>(null);
+  const closeStartRef = useRef<number | null>(null);
+  const prevBlinkStateRef = useRef(blink.state);
+
+  const [butResult, setButResult] = useState<number | null>(null);
+  const [butMessage, setButMessage] = useState<string>("");
+
+  const resetBUT = () => {
+    setIsMeasuringBUT(false);
+    setButPhase("idle");
+    longCloseStartRef.current = null;
+    openStartRef.current = null;
+    closeStartRef.current = null;
+  };
+
+  const startBUT = () => {
+    setButResult(null);
+    setIsMeasuringBUT(true);
+    setButPhase("needLongClose");
+    longCloseStartRef.current = null;
+    openStartRef.current = null;
+    closeStartRef.current = null;
+    setButMessage(
+      // "버튼을 눌렀습니다. 이제 눈을 1초 이상 감았다가, 눈을 뜬 채로 유지하다가 따가워질 때 눈을 감아주세요."
+      " "
+    );
+  };
+
+  useEffect(() => {
+    const now = Date.now();
+    const prev = prevBlinkStateRef.current;
+    const curr = blink.state;
+
+    if (!isMeasuringBUT) {
+      prevBlinkStateRef.current = curr;
+      return;
+    }
+
+    switch (butPhase) {
+      case "needLongClose": {
+        if (prev !== "CLOSED" && curr === "CLOSED") {
+          longCloseStartRef.current = now;
+        }
+        if (prev === "CLOSED" && curr === "OPEN") {
+          const started = longCloseStartRef.current;
+          if (started && now - started >= 1000) {
+            openStartRef.current = now;
+            setButPhase("waitCloseAfterOpen");
+            setButMessage(
+              // "잘했어요! 이제 눈을 뜬 채로 유지하다가 따가워질 때 자연스럽게 눈을 감아주세요."
+              " "
+            );
+            const audio = new Audio(openEyeSound);
+            audio.play();
+          } else {
+            longCloseStartRef.current = null;
+            // setButMessage("1초 이상 감고 시작해야 해요. 다시 한 번 눈을 길게 감아볼까요?");
+            setButMessage(" ");
+          }
+        }
+        break;
+      }
+      case "waitCloseAfterOpen": {
+        if (prev !== "CLOSED" && curr === "CLOSED") {
+          closeStartRef.current = now;
+          const o = openStartRef.current;
+          const c = closeStartRef.current;
+          if (o && c && c > o) {
+            const seconds = (c - o) / 1000;
+            setButResult(seconds);
+            setButMessage(
+              // `사용자님의 BUT(눈물막 파괴 시간)은 ${seconds.toFixed(
+              //   1
+              // )}초에요. 측정된 BUT 시간 안에 한 번 이상 눈을 깜빡이는 걸 목표로 해봐요!`
+              "!"
+            );
+          } else {
+            // setButMessage("측정값을 계산하지 못했어요. 다시 시도해볼까요?");
+            setButMessage(" ");
+          }
+          resetBUT();
+        }
+        break;
+      }
+    }
+
+    prevBlinkStateRef.current = curr;
+  }, [blink.state, isMeasuringBUT, butPhase]);
+
   // HUD 표시 문자열 (평균/임계값/최소/최대/최근 갱신)
   const hudText = (() => {
     const avg = isFinite(blink.avgRatio) ? blink.avgRatio : 0;
@@ -188,6 +285,27 @@ export default function App() {
         onToggleControlPanel={() => setShowControlPanel(!showControlPanel)}
         onToggleCamera={toggleCamera}
         isCameraOn={showFace}
+        butButton={
+          <button
+            onClick={startBUT}
+            disabled={isMeasuringBUT}
+            style={styles.butButton}
+          >
+            {isMeasuringBUT ? "측정 중…" : "BUT 측정"}
+          </button>
+        }
+        butMessage={
+          <span style={styles.butText}>
+            {/* {butMessage ||
+              "버튼을 누르면: 눈을 1초 이상 감은 뒤, 눈을 뜬 채로 유지하다 따가워질 때 감아 측정합니다."} */}
+            {butResult != null && (
+              <span style={styles.butResult}>
+                {" "}
+                | 결과: {butResult.toFixed(1)}초
+              </span>
+            )}
+          </span>
+        }
       />
 
       {/* 컨트롤 패널 - 토글 가능 (기존 props 유지) */}
