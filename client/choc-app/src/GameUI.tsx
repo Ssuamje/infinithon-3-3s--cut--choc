@@ -14,6 +14,7 @@ declare global {
 }
 
 interface GameUIProps {
+  onSendBlinkData: () => void;
   hearts: number;
   combo: number;
   score: number;
@@ -44,6 +45,7 @@ export const GameUI: React.FC<GameUIProps> = ({
   onTogglePause,
   onToggleControlPanel,
   onToggleCamera,
+  onSendBlinkData,
   isCameraOn,
 }) => {
   const timePercent = (timeRemaining / 6000) * 100;
@@ -123,6 +125,9 @@ export const GameUI: React.FC<GameUIProps> = ({
             >
               ⚙️
             </Button>
+            {/* 📤 데이터 전송 버튼 */}
+            <Button onClick={onSendBlinkData} title="Blink 데이터 전송">
+          </Button>
           </ButtonContainer>
         </Section>
       </StatusBar>
