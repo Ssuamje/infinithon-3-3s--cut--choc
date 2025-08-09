@@ -1,12 +1,13 @@
 import os
-import openai
+import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 from io import BytesIO
 from datetime import datetime, timezone
-import numpy as np
 
+import openai
 
 
 
@@ -105,8 +106,6 @@ def clean_and_slide_data(data: pd.DataFrame, date: str) -> pd.DataFrame:
     return slided_data, grouped
 
 def plot_blink_data(cleaned_data: pd.DataFrame, date: str):
-    import numpy as np
-    import pandas as pd
     sns.set_theme(style="whitegrid")
 
     # Series/DF → 숫자 시리즈로 정규화
@@ -144,17 +143,19 @@ def plot_blink_data(cleaned_data: pd.DataFrame, date: str):
     if lower_y == upper_y:  # 동일하면 보정
         upper_y = lower_y + 2
     plt.ylim(lower_y, upper_y)
-
-    plt.xlabel('')
-    plt.ylabel('')
-    plt.axhline(y=IDEAL_BLINK_PER_MINUTE, linestyle='--', alpha=0.5)
-
+    
     # 이모지 위치도 인덱스 길이 기반으로
-    plt.text(len(s)-1, IDEAL_BLINK_PER_MINUTE, '😊', fontsize=14, ha='center', va='bottom')
+    plt.text(len(s) - 0.9, IDEAL_BLINK_PER_MINUTE, '😊', fontname="sans-serif", fontsize=14, ha='center', va='bottom')
+
+    plt.title(f"오늘의 눈 깜빡임 기록", fontname='NanumSquareRound', fontsize=14, fontweight='bold')
+    plt.xlabel('시간대', fontname='NanumSquareRound', fontsize=10)
+    plt.ylabel('평균 분당 눈 깜빡임 수', fontname='NanumSquareRound', fontsize=10)
+    plt.axhline(y=IDEAL_BLINK_PER_MINUTE, linestyle='--', alpha=0.5)
 
     sns.despine(left=False, bottom=False)
     plt.tight_layout()
     buf = BytesIO()
+    # plt.savefig('x.png', format='png', bbox_inches='tight')
     plt.savefig(buf, format='png', bbox_inches='tight')
     buf.seek(0)
     img = buf.getvalue()
