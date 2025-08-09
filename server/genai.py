@@ -170,8 +170,8 @@ def generate_report_text(user_info: dict = None, histories: dict = None) -> str:
     :param data: DataFrame containing the blink data.
     :return: A generated report as a string.
     """
-    # today = datetime.date.today().strftime("%Y-%m-%d %H:%M:%S")
-    today = "2025-08-10 11:13:01"
+    today = datetime.today()
+    # today = "2025-08-10 11:13:01"
     weather = get_weather_forecast()
 
     last_month, last_week, this_week = histories
@@ -185,9 +185,15 @@ def generate_report_text(user_info: dict = None, histories: dict = None) -> str:
     text_data += "이번 주의 일별 분당 평균 눈 깜빡임 횟수:\n" + \
         "\n".join(f"{row.DATE_HOUR}, {row.BLINK_INTERVAL:.2f}" for _, row in this_week.to_frame().reset_index().iterrows()) + "\n"
     text_data += "===============================\n"
+    today_data = this_week.to_frame().reset_index()
+    today_data['DATE'] = [datetime.strptime(index, "%Y-%m-%dT%H").date() for index in this_week.index]
+    today_data = today_data[today_data.DATE == today.date()]
+    text_data += "오늘의 시간별 평균 분당 눈 깜빡임 횟수:\n" + \
+        "\n".join(f"{row.DATE_HOUR}, {row.BLINK_INTERVAL:.2f}" for _, row in today_data.iterrows()) + "\n"
+    text_data += "===============================\n"
     
     with open('prompts/system_prompt.txt', 'r') as file:
-        system_prompt = file.read().format(today=today, data=text_data, weather=weather, user=user_info)
+        system_prompt = file.read().format(today=today.strftime("%Y-%m-%d %H:%M:%S"), data=text_data, weather=weather, user=user_info)
     with open('prompts/daily_report.txt', 'r') as file:
         prompt = file.read()
         prompt = prompt
