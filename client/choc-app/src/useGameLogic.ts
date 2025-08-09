@@ -254,25 +254,43 @@ export function useGameLogic(
   ]);
 
 
-  // 피버 모드 체크
+  // 게임 페이즈 체크 (피버 모드 + 시간 상태 결합)
   useEffect(() => {
-    if (gameState.combo >= FEVER_THRESHOLD && gameState.gamePhase !== "fever") {
-      setGameState((prev) => ({ ...prev, gamePhase: "fever" }));
-    } else if (
-      gameState.combo < FEVER_THRESHOLD &&
-      gameState.gamePhase === "fever"
-    ) {
-      setGameState((prev) => ({
-        ...prev,
-        gamePhase:
-          prev.timeRemaining <= DANGER_THRESHOLD
-            ? "danger"
-            : prev.timeRemaining <= WARNING_THRESHOLD
-            ? "warning"
-            : "idle",
-      }));
-    }
-  }, [gameState.combo, gameState.gamePhase, gameState.timeRemaining]);
+    setGameState((prev) => {
+      let newPhase = prev.gamePhase;
+      
+      // 피버 모드 체크
+      const isFeverCombo = prev.combo >= FEVER_THRESHOLD;
+      
+      // 시간에 따른 기본 페이즈 결정
+      let timeBasedPhase = "idle";
+      if (prev.timeRemaining <= DANGER_THRESHOLD) {
+        timeBasedPhase = "danger";
+      } else if (prev.timeRemaining <= WARNING_THRESHOLD) {
+        timeBasedPhase = "warning";
+      }
+      
+      // 피버 모드이면서 동시에 시간 상태도 반영
+      if (isFeverCombo) {
+        // 피버 모드 중에도 시간이 위험하면 danger, 경고면 warning
+        if (timeBasedPhase === "danger") {
+          newPhase = "danger";
+        } else if (timeBasedPhase === "warning") {
+          newPhase = "warning";  
+        } else {
+          newPhase = "fever";
+        }
+      } else {
+        newPhase = timeBasedPhase;
+      }
+      
+      if (newPhase !== prev.gamePhase) {
+        return { ...prev, gamePhase: newPhase };
+      }
+      
+      return prev;
+    });
+  }, [gameState.combo, gameState.timeRemaining]);
 
   return {
     gameState,
