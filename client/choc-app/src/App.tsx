@@ -1,5 +1,5 @@
 // src/App.tsx
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useBlinkDetector } from "./useBlinkDetector";
 import { useGameLogic } from "./useGameLogic";
 import { GameUI } from "./GameUI";
@@ -105,6 +105,18 @@ export default function App() {
   }, []);
 
   // 2) 깜빡임 감지
+  useEffect(() => {
+    const initializeCamera = async () => {
+      await startCamera();
+      if (videoRef.current) {
+        console.log("Starting useBlinkDetector after camera initialization");
+        useBlinkDetector(videoRef.current);
+      }
+    };
+
+    initializeCamera();
+  }, []);
+
   const blink = useBlinkDetector(videoRef.current);
 
   // 3) 게임 로직

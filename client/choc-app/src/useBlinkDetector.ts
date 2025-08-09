@@ -72,7 +72,7 @@ export function useBlinkDetector(videoEl: HTMLVideoElement | null) {
   const lastDetectedRatioRef = useRef<number>(0);
 
   // 깜빡임 감지를 위한 임계값들 - 더 관대하게 조정
-  const CLOSE_T = 0.30;   // 감음 판단 임계값 (더 낮게)
+  const CLOSE_T = 0.25;   // 감음 판단 임계값 (더 낮게)
   const OPEN_T = 0.50;    // 뜸 판단 임계값 (더 낮게)
   const MIN_STATE_DURATION = 30;    // 상태 변경 최소 지속시간 (ms) - 더 짧게
   const MIN_CONSECUTIVE_FRAMES = 1; // 상태 변경을 위한 최소 연속 프레임 수 - 더 관대하게
@@ -82,8 +82,7 @@ export function useBlinkDetector(videoEl: HTMLVideoElement | null) {
   const initMesh = useMemo(
     () => async () => {
       const fm = new FaceMesh({
-        locateFile: (f) =>
-          `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`,
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
       });
       fm.setOptions({
         maxNumFaces: 1,
@@ -97,11 +96,16 @@ export function useBlinkDetector(videoEl: HTMLVideoElement | null) {
   );
 
   useEffect(() => {
-    if (!videoEl) return;
+    console.log("videoEl in useBlinkDetector:", videoEl);
+    if (!videoEl) {
+      console.error("videoEl is null or undefined in useBlinkDetector");
+      return;
+    }
+
     let cancelled = false;
 
     // 상태 초기화
-    // stateRef.current = "UNKNOWN";
+    stateRef.current = "UNKNOWN";
     stateStartTimeRef.current = Date.now();
     consecutiveFramesRef.current = 0;
     rLRef.current = 0;
@@ -109,14 +113,15 @@ export function useBlinkDetector(videoEl: HTMLVideoElement | null) {
 
     (async () => {
       await initMesh();
-      if (!meshRef.current) return;
-
+      if (!meshRef.current) {
+        console.error("FaceMesh is not initialized");
+      return;
+    }
+      console.log("FaceMesh initialized successfully");
       meshRef.current.onResults((results: { multiFaceLandmarks?: { x: number, y: number }[][] }) => {
         const lm = results.multiFaceLandmarks?.[0];
         if (!lm) {
           console.warn("No landmarks detected");
-        } else {
-          console.log("Landmarks detected:", lm);
         }
 
         const now = Date.now();
@@ -125,7 +130,7 @@ export function useBlinkDetector(videoEl: HTMLVideoElement | null) {
         if (!lm) {
           // 일정 시간 후 상태 리셋
           if (now - stateStartTimeRef.current > NO_FACE_TIMEOUT) {
-            // stateRef.current = "UNKNOWN";
+            stateRef.current = "UNKNOWN";
             rLRef.current = 0;
             rRRef.current = 0;
             consecutiveFramesRef.current = 0;
@@ -224,10 +229,11 @@ export function useBlinkDetector(videoEl: HTMLVideoElement | null) {
       // 카메라 프레임 → FaceMesh로 보내기 (더 높은 해상도와 빠른 처리)
       camRef.current = new Camera(videoEl, {
         onFrame: async () => {
+          console.log("Sending frame to FaceMesh");
           if (!meshRef.current) return;
-          await meshRef.current.send({ image: videoEl });
+                    await meshRef.current.send({ image: videoEl });
         },
-        width: 1280, // 더 높은 해상도로 정확도 향상
+        width: 1280,
         height: 720,
       });
 
@@ -243,7 +249,7 @@ export function useBlinkDetector(videoEl: HTMLVideoElement | null) {
       meshRef.current = null;
       if (rafId) cancelAnimationFrame(rafId);
     };
-  }, [videoEl, initMesh]);
+  }, [videoEl]);
 
   return res;
 }
