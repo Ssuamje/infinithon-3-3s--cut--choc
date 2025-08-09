@@ -7,7 +7,7 @@ from datetime import datetime
 
 PERSONAS = []
 # increase in blink rate
-PERSONAS.append([8.0, 8.1, 8.5, 9.2, 9.0, 8.8, 7.7, 6.3, 7.0, 8.0, 8.1, 8.5, 9.3, 9.1, 10.5])
+PERSONAS.append([8.0, 8.1, 8.5, 9.2, 9.0, 8.8, 7.7, 6.3, 7.0, 8.0, 8.1, 8.5, 9.3, 9.1, 9.5])
 # decrease in blink rate
 PERSONAS.append([10.0, 9.8, 9.5, 9.2, 8.8, 8.5, 7.7, 6.3, 6.0, 6.1, 6.5, 7.3, 7.1, 7.0, 6.5])
 # stable blink rate
@@ -97,7 +97,7 @@ if __name__ == "__main__":
                 f.write(f"{idx},{timestamp}\n")
 
             # write for today
-            today_data = generate_blink_data(i, 10.0, TODAY, 8, 11)
+            today_data = generate_blink_data(i, 10.5, TODAY, 4, 11)
             for idx, line in enumerate(today_data):
                 timestamp = line.strip()
                 f.write(f"{idx + len(data)},{timestamp}\n")
