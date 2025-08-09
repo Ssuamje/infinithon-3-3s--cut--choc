@@ -7,6 +7,7 @@ fun main(args: Array<String>) {
 }
 
 fun Application.module() {
+    configureApplicationDependencies()
     configureMonitoring()
     configureHTTP()
     configureSerialization()

@@ -3,7 +3,7 @@ ktor:
         modules:
             - com.smilegate.ApplicationKt.module
     deployment:
-        port: 8080
+        port: 3333
         host: 0.0.0.0
 postgres:
   url: ${POSTGRES_URL:jdbc:postgresql://localhost:5432/statdb}
