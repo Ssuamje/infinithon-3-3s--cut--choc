@@ -1,6 +1,17 @@
 // src/GameUI.tsx
-import React from "react";
+import React, { useEffect } from "react";
 import styled, { keyframes, css } from "styled-components";
+
+// blinkAPI 타입 정의
+declare global {
+  interface Window {
+    blinkAPI: {
+      notifyGamePhaseChanged: (gamePhase: string) => void;
+      notifyCountdownStarted: (countdown: number) => void;
+      notifyCountdownFinished: () => void;
+    };
+  }
+}
 
 interface GameUIProps {
   hearts: number;
@@ -36,6 +47,24 @@ export const GameUI: React.FC<GameUIProps> = ({
   isCameraOn,
 }) => {
   const timePercent = (timeRemaining / 6000) * 100;
+
+  // 게임 상태 변경 시 메인 프로세스에 알림
+  useEffect(() => {
+    if (window.blinkAPI) {
+      window.blinkAPI.notifyGamePhaseChanged(gamePhase);
+    }
+  }, [gamePhase]);
+
+  // 카운트다운 시작/종료 시 메인 프로세스에 알림
+  useEffect(() => {
+    if (window.blinkAPI) {
+      if (countdown !== null && countdown > 0) {
+        window.blinkAPI.notifyCountdownStarted(countdown);
+      } else if (countdown === null) {
+        window.blinkAPI.notifyCountdownFinished();
+      }
+    }
+  }, [countdown]);
 
   return (
     <Container>
@@ -180,18 +209,22 @@ const fadeInUp = keyframes`
 
 // 스타일 컴포넌트
 const Container = styled.div`
-  position: relative; // fixed에서 relative로 변경
+  position: relative;
   width: 100%;
   pointer-events: none;
   z-index: 1000;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  margin-bottom: 20px; // 아래 여백 추가
+  margin-bottom: 20px;
+
+  /* 드래그 영역 개선 */
+  -webkit-app-region: drag; /* macOS */
+  app-region: drag; /* 표준 */
 `;
 
 const StatusBar = styled.div<{ $gamePhase: string }>`
-  position: relative; // absolute에서 relative로 변경
+  position: relative;
   width: clamp(300px, 85vw, 600px);
-  margin: 0 auto; // 중앙 정렬
+  margin: 0 auto;
   padding: clamp(12px, 2.5vw, 16px) clamp(16px, 4vw, 24px);
   border-radius: clamp(16px, 4vw, 24px);
   backdrop-filter: blur(20px);
@@ -203,6 +236,10 @@ const StatusBar = styled.div<{ $gamePhase: string }>`
   align-items: center;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
   animation: ${fadeInUp} 0.6s ease-out;
+
+  /* 드래그 방지 (버튼 클릭을 위해) */
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 
   ${({ $gamePhase }) =>
     $gamePhase === "idle" &&
@@ -396,6 +433,10 @@ const Button = styled.button<{ $variant?: string; $active?: boolean }>`
     transform: translateY(0);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
+
+  /* 드래그 방지 */
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 
   ${({ $variant, $active }) =>
     $variant === "camera" &&

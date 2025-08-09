@@ -82,6 +82,30 @@ export function useBlinkDetector(videoRef: RefObject<HTMLVideoElement>) {
     lastCalibratedAt: null,
   });
 
+  const lastSnapRef = useRef<BlinkResult | null>(null);
+  const EPS = 1e-4;
+
+  function safeSetRes(next: BlinkResult) {
+    const prev = lastSnapRef.current;
+    if (
+      prev &&
+      Math.abs(prev.ratioL - next.ratioL) < EPS &&
+      Math.abs(prev.ratioR - next.ratioR) < EPS &&
+      Math.abs(prev.avgRatio - next.avgRatio) < EPS &&
+      prev.state === next.state &&
+      prev.blinks === next.blinks &&
+      Math.abs(prev.CLOSE_T - next.CLOSE_T) < EPS &&
+      Math.abs(prev.OPEN_T - next.OPEN_T) < EPS &&
+      Math.abs(prev.windowMin - next.windowMin) < EPS &&
+      Math.abs(prev.windowMax - next.windowMax) < EPS &&
+      prev.lastCalibratedAt === next.lastCalibratedAt
+    ) {
+      return; // 변화 없으면 렌더 스킵
+    }
+    lastSnapRef.current = next;
+    setRes(next);
+  }
+
   const camRef = useRef<Camera | null>(null);
   const meshRef = useRef<FaceMesh | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -172,6 +196,8 @@ export function useBlinkDetector(videoRef: RefObject<HTMLVideoElement>) {
       }
       meshRef.current.onResults(
         (results: { multiFaceLandmarks?: { x: number; y: number }[][] }) => {
+          if (cancelled) return;
+
           const lm = results.multiFaceLandmarks?.[0];
           const now = Date.now();
 
@@ -185,8 +211,7 @@ export function useBlinkDetector(videoRef: RefObject<HTMLVideoElement>) {
               consecutiveFramesRef.current = 0;
             }
 
-            setRes((prev) => ({
-              ...prev,
+            safeSetRes({
               ratioL: rLRef.current,
               ratioR: rRRef.current,
               avgRatio:
@@ -201,7 +226,7 @@ export function useBlinkDetector(videoRef: RefObject<HTMLVideoElement>) {
               windowMin: winMinRef.current,
               windowMax: winMaxRef.current,
               lastCalibratedAt: lastCalibratedAtRef.current,
-            }));
+            });
             return;
           }
 
@@ -303,7 +328,7 @@ export function useBlinkDetector(videoRef: RefObject<HTMLVideoElement>) {
             consecutiveFramesRef.current = 0;
           }
 
-          setRes({
+          safeSetRes({
             ratioL: rLRef.current,
             ratioR: rRRef.current,
             avgRatio,
@@ -346,7 +371,7 @@ export function useBlinkDetector(videoRef: RefObject<HTMLVideoElement>) {
   useEffect(() => {
     const cleanup = handleVideoRefChange();
     return cleanup;
-  }, [handleVideoRefChange]);
+  }, []);
 
   return res;
 }
