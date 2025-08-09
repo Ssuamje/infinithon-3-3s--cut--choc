@@ -14,7 +14,6 @@ declare global {
 }
 
 interface GameUIProps {
-  onSendBlinkData: () => void;
   hearts: number;
   combo: number;
   score: number;
@@ -29,6 +28,11 @@ interface GameUIProps {
   onToggleControlPanel: () => void;
   onToggleCamera: () => void;
   isCameraOn: boolean;
+  opacity: number;
+  warningOpacity: number;
+  dangerOpacity: number;
+  onToggleContextMenu: () => void;
+  showContextMenu: boolean;
 }
 
 export const GameUI: React.FC<GameUIProps> = ({
@@ -45,10 +49,26 @@ export const GameUI: React.FC<GameUIProps> = ({
   onTogglePause,
   onToggleControlPanel,
   onToggleCamera,
-  onSendBlinkData,
   isCameraOn,
+  opacity,
+  warningOpacity,
+  dangerOpacity,
+  onToggleContextMenu,
+  showContextMenu,
 }) => {
   const timePercent = (timeRemaining / 6000) * 100;
+  
+  // 게임 상태에 따른 투명도 결정
+  const getCurrentOpacity = () => {
+    switch (gamePhase) {
+      case "warning":
+        return warningOpacity;
+      case "danger":
+        return dangerOpacity;
+      default:
+        return opacity;
+    }
+  };
 
   // 게임 상태 변경 시 메인 프로세스에 알림
   useEffect(() => {
@@ -69,7 +89,7 @@ export const GameUI: React.FC<GameUIProps> = ({
   }, [countdown]);
 
   return (
-    <Container>
+    <Container style={{ opacity: getCurrentOpacity() }}>
       {/* 상단 상태바 */}
       <StatusBar $gamePhase={gamePhase}>
         {/* 왼쪽: 라이프와 콤보 */}
@@ -124,7 +144,14 @@ export const GameUI: React.FC<GameUIProps> = ({
               title={showControlPanel ? "설정 패널 숨기기" : "설정 패널 보기"}
             >
               ⚙️
-          </Button>
+            </Button>
+            
+            <Button
+              onClick={onToggleContextMenu}
+              title="투명도 조절"
+            >
+              🎛️
+            </Button>
           </ButtonContainer>
         </Section>
       </StatusBar>
@@ -142,6 +169,81 @@ export const GameUI: React.FC<GameUIProps> = ({
           </Countdown>
         )}
       </TimerSection>
+
+      {/* 투명도 조절 메뉴 */}
+      {showContextMenu && (
+        <ContextMenuOverlay onClick={onToggleContextMenu}>
+          <ContextMenuContent onClick={(e) => e.stopPropagation()}>
+            <ContextMenuTitle>투명도 조절</ContextMenuTitle>
+            
+            {/* 기본 투명도 */}
+            <OpacitySliderContainer>
+              <OpacityLabel>기본 (초록/피버)</OpacityLabel>
+              <OpacitySlider
+                type="range"
+                min="0.1"
+                max="1"
+                step="0.1"
+                value={opacity}
+                onChange={(e) => {
+                  const event = new CustomEvent('opacityChange', {
+                    detail: { 
+                      type: 'normal',
+                      opacity: parseFloat(e.target.value) 
+                    }
+                  });
+                  window.dispatchEvent(event);
+                }}
+              />
+              <OpacityValue>{Math.round(opacity * 100)}%</OpacityValue>
+            </OpacitySliderContainer>
+            
+            {/* 주황 상태 투명도 */}
+            <OpacitySliderContainer>
+              <OpacityLabel>주황 상태</OpacityLabel>
+              <OpacitySlider
+                type="range"
+                min="0.1"
+                max="1"
+                step="0.1"
+                value={warningOpacity}
+                onChange={(e) => {
+                  const event = new CustomEvent('opacityChange', {
+                    detail: { 
+                      type: 'warning',
+                      opacity: parseFloat(e.target.value) 
+                    }
+                  });
+                  window.dispatchEvent(event);
+                }}
+              />
+              <OpacityValue>{Math.round(warningOpacity * 100)}%</OpacityValue>
+            </OpacitySliderContainer>
+            
+            {/* 빨강 상태 투명도 */}
+            <OpacitySliderContainer>
+              <OpacityLabel>빨강 상태</OpacityLabel>
+              <OpacitySlider
+                type="range"
+                min="0.1"
+                max="1"
+                step="0.1"
+                value={dangerOpacity}
+                onChange={(e) => {
+                  const event = new CustomEvent('opacityChange', {
+                    detail: { 
+                      type: 'danger',
+                      opacity: parseFloat(e.target.value) 
+                    }
+                  });
+                  window.dispatchEvent(event);
+                }}
+              />
+              <OpacityValue>{Math.round(dangerOpacity * 100)}%</OpacityValue>
+            </OpacitySliderContainer>
+          </ContextMenuContent>
+        </ContextMenuOverlay>
+      )}
 
       {/* 게임 오버 화면 */}
       {!isAlive && (
@@ -585,4 +687,89 @@ const RestartButton = styled.button`
   &:active {
     transform: translateY(0);
   }
+`;
+
+// 컨텍스트 메뉴 스타일
+const ContextMenuOverlay = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+  pointer-events: auto;
+  backdrop-filter: blur(8px);
+  -webkit-app-region: no-drag;
+`;
+
+const ContextMenuContent = styled.div`
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px);
+  padding: 24px;
+  border-radius: 16px;
+  text-align: center;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  animation: ${fadeInUp} 0.4s ease-out;
+  min-width: 300px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+`;
+
+const ContextMenuTitle = styled.h3`
+  margin: 0 0 20px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 18px;
+  font-weight: 600;
+`;
+
+const OpacitySliderContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 16px;
+`;
+
+const OpacityLabel = styled.div`
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  font-weight: 500;
+`;
+
+const OpacitySlider = styled.input`
+  width: 200px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+  
+  &::-webkit-slider-thumb {
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+  
+  &::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+`;
+
+const OpacityValue = styled.div`
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 14px;
+  font-weight: 500;
 `;
