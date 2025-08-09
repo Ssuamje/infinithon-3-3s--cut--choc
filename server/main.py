@@ -1,6 +1,7 @@
 # server/main.py
 import time
 import asyncio
+import pandas as pd
 from typing import Dict
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
