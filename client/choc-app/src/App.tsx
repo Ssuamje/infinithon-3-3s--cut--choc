@@ -7,10 +7,14 @@ import { GameUI } from "./GameUI";
 import { VideoDisplay } from "./components/VideoDisplay";
 import { ControlPanel } from "./components/ControlPanel";
 import { BlinkWarningOverlay } from "./components/BlinkWarningOverlay";
-import { FullScreenWarningOverlay } from "./components/FullScreenWarningOverlay";
+import { WarningWindow } from "./components/WarningWindow";
+import { BackgroundWarningPopup } from "./components/BackgroundWarningPopup";
 import { useState, useEffect } from "react";
 
 export default function App() {
+  // 경고 창 모드인지 확인 (URL 해시로 구분)
+  const isWarningWindow = window.location.hash === "#/warning";
+
   // 카메라 관련 로직
   const { videoRef, state, ready, error, startCamera, stopCamera } =
     useCamera();
@@ -52,6 +56,71 @@ export default function App() {
     }
   }, [blink.blinks]);
 
+  // 깜빡임 경고 상태를 Electron 메인 프로세스에 전송
+  useEffect(() => {
+    if (window.blinkAPI && window.blinkAPI.updateWarningState) {
+      window.blinkAPI.updateWarningState({
+        isVisible: blinkTimer.progress > 30 || blinkTimer.isWarning,
+        progress: blinkTimer.progress,
+        timeWithoutBlink: blinkTimer.timeWithoutBlink,
+        combo: gameState.combo,
+        score: gameState.score,
+        totalBlinks: blink.blinks,
+      });
+    }
+  }, [
+    blinkTimer.progress,
+    blinkTimer.isWarning,
+    blinkTimer.timeWithoutBlink,
+    gameState.combo,
+    gameState.score,
+    blink.blinks,
+  ]);
+
+  // 경고 상태 동기화 요청 처리
+  useEffect(() => {
+    const handleWarningStateSync = () => {
+      if (window.electronAPI && window.electronAPI.sendWarningStateSync) {
+        window.electronAPI.sendWarningStateSync({
+          isVisible: blinkTimer.progress > 30 || blinkTimer.isWarning,
+          progress: blinkTimer.progress,
+          timeWithoutBlink: blinkTimer.timeWithoutBlink,
+          combo: gameState.combo,
+          score: gameState.score,
+          totalBlinks: blink.blinks,
+        });
+      }
+    };
+
+    if (window.electronAPI) {
+      window.electronAPI.on(
+        "request-warning-state-sync",
+        handleWarningStateSync
+      );
+    }
+
+    return () => {
+      if (window.electronAPI) {
+        window.electronAPI.removeListener(
+          "request-warning-state-sync",
+          handleWarningStateSync
+        );
+      }
+    };
+  }, [
+    blinkTimer.progress,
+    blinkTimer.isWarning,
+    blinkTimer.timeWithoutBlink,
+    gameState.combo,
+    gameState.score,
+    blink.blinks,
+  ]);
+
+  // 경고 창 모드일 때는 WarningWindow만 렌더링
+  if (isWarningWindow) {
+    return <WarningWindow />;
+  }
+
   // 카메라 표시 토글 함수 (스트림은 유지하고 화면만 숨김/표시)
   const toggleCamera = () => {
     if (showFace) {
@@ -84,18 +153,18 @@ export default function App() {
   return (
     <div style={styles.wrap}>
       {/* 6초 후 전체화면 경고 오버레이 */}
-      <FullScreenWarningOverlay
+      {/* <FullScreenWarningOverlay
         isVisible={blinkTimer.isWarning}
         totalBlinks={blink.blinks}
         onBlink={() => {
           // 강제로 깜빡임 상태를 리셋하여 오버레이를 닫음
           // 실제 깜빡임이 감지되면 자동으로 타이머가 리셋됨
         }}
-      />
+      /> */}
 
       {/* 깜빡임 경고 오버레이 - 모든 창 위에 표시 */}
       <BlinkWarningOverlay
-        isVisible={blinkTimer.progress > 50 || blinkTimer.isWarning} // 50% 이후부터 표시
+        isVisible={blinkTimer.progress > 30 || blinkTimer.isWarning} // 30% 이후부터 표시
         progress={blinkTimer.progress}
         timeWithoutBlink={blinkTimer.timeWithoutBlink}
         combo={gameState.combo}
@@ -162,6 +231,9 @@ export default function App() {
         ※ 완전한 깜빡임 사이클(뜸→감음→뜸)을 감지합니다. 눈을 감고만 있으면
         카운트되지 않아요!
       </p> */}
+
+      {/* WarningWindow 대신 BackgroundWarningPopup 사용 */}
+      <BackgroundWarningPopup />
     </div>
   );
 }

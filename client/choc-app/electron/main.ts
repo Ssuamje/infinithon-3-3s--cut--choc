@@ -17,9 +17,20 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 let win: BrowserWindow | null = null;
+let warningWin: BrowserWindow | null = null; // 깜빡임 경고 창
 let tray: Tray | null = null;
 let isQuitting = false;
 let blinkCount = 0;
+
+// 깜빡임 경고 상태
+let warningState = {
+  isVisible: false,
+  progress: 0,
+  timeWithoutBlink: 0,
+  combo: 0,
+  score: 0,
+  totalBlinks: 0,
+};
 
 // 아이콘 캐시
 let openEyeImg: Electron.NativeImage | null = null;
@@ -78,8 +89,15 @@ async function createWindow() {
   });
 
   // 창 표시/숨김 시 트레이 아이콘 업데이트
-  win.on("show", updateTrayVisual);
+  win.on("show", () => {
+    updateTrayVisual();
+    // 창이 다시 보이게 되었을 때 경고 상태 동기화
+    syncWarningState();
+  });
   win.on("hide", updateTrayVisual);
+
+  // 창 포커스 시 경고 상태 동기화
+  win.on("focus", syncWarningState);
 
   // IPC 통신 설정
   setupIPC();
@@ -249,6 +267,148 @@ function setupIPC() {
   ipcMain.handle("get-blink-count", () => {
     return blinkCount;
   });
+
+  // 깜빡임 경고 상태 업데이트
+  ipcMain.on("update-warning-state", (event, state) => {
+    updateWarningState(state);
+  });
+
+  // 경고 상태 동기화 응답
+  ipcMain.on("warning-state-sync-response", (event, state) => {
+    console.log("Received warning state sync response:", state);
+    updateWarningState(state);
+  });
+
+  // 앱 포커스 요청 처리
+  ipcMain.on("focus-app", () => {
+    if (win) {
+      win.show();
+      win.focus();
+    }
+  });
+}
+
+// 깜빡임 경고 창 생성
+function createWarningWindow() {
+  if (warningWin) {
+    warningWin.destroy();
+  }
+
+  warningWin = new BrowserWindow({
+    width: 320,
+    height: 120,
+    show: false,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: false, // 작업 표시줄에 표시하여 독립성 확보
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    closable: false,
+    focusable: false,
+    // 완전히 독립적인 프로세스로 실행
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      // 독립적인 프로세스 설정
+      backgroundThrottling: false,
+    },
+  });
+
+  // 경고 창 HTML 로드 (해시는 렌더러에서 처리)
+  if (process.env.VITE_DEV_SERVER_URL) {
+    warningWin.loadURL(`${process.env.VITE_DEV_SERVER_URL}/#/warning`);
+  } else {
+    const indexPath = path.join(__dirname, "../../dist/index.html");
+    warningWin.loadFile(indexPath);
+    // 해시는 로드 후 설정
+    warningWin.webContents.once("did-finish-load", () => {
+      warningWin?.webContents.executeJavaScript(
+        "window.location.hash = '#/warning'"
+      );
+    });
+  }
+
+  // 경고 창이 닫힐 때 정리
+  warningWin.on("closed", () => {
+    warningWin = null;
+  });
+
+  // 경고 창이 숨겨질 때 완전히 제거 (새로 생성하도록)
+  warningWin.on("hide", () => {
+    if (warningWin) {
+      warningWin.destroy();
+      warningWin = null;
+    }
+  });
+
+  return warningWin;
+}
+
+// 깜빡임 경고 창 표시/숨김
+function toggleWarningWindow(show: boolean) {
+  console.log(`toggleWarningWindow called with show: ${show}`);
+
+  if (show) {
+    console.log("Creating and showing warning window...");
+    // 매번 새로 생성하여 독립성 보장
+    warningWin = createWarningWindow();
+
+    // 화면 위치 설정 (우상단에 고정)
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { width } = primaryDisplay.workAreaSize;
+
+    // 우상단에 고정 위치
+    const x = width - 340;
+    const y = 20;
+
+    warningWin.setPosition(x, y, false);
+    warningWin.show();
+
+    // 경고 창을 포커스하지 않도록 설정
+    warningWin.setFocusable(false);
+
+    console.log(`Warning window positioned at (${x}, ${y})`);
+    console.log("Warning window should now be visible");
+  } else {
+    console.log("Hiding warning window...");
+    if (warningWin && !warningWin.isDestroyed()) {
+      warningWin.hide();
+    }
+  }
+}
+
+// 깜빡임 경고 상태 업데이트
+function updateWarningState(newState: Partial<typeof warningState>) {
+  console.log("updateWarningState called with:", newState);
+
+  warningState = { ...warningState, ...newState };
+
+  // 경고 창이 있다면 상태 업데이트
+  if (warningWin && !warningWin.isDestroyed()) {
+    console.log("Sending state update to warning window");
+    warningWin.webContents.send("update-warning-state", warningState);
+  }
+
+  // 경고 창 표시/숨김 결정
+  const shouldShow = warningState.isVisible && warningState.progress > 30;
+  console.log(
+    `Should show warning: ${shouldShow} (isVisible: ${warningState.isVisible}, progress: ${warningState.progress})`
+  );
+
+  toggleWarningWindow(shouldShow);
+}
+
+// 경고 상태 동기화 (렌더러와 메인 프로세스 간)
+function syncWarningState() {
+  if (win && !win.isDestroyed()) {
+    // 렌더러에 현재 경고 상태 요청
+    win.webContents.send("request-warning-state-sync");
+  }
 }
 
 app.whenReady().then(async () => {

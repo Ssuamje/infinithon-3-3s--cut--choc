@@ -8,6 +8,7 @@ import {
 } from "react";
 import { FaceMesh } from "@mediapipe/face_mesh";
 import { Camera } from "@mediapipe/camera_utils";
+import { usePageVisibility } from "./hooks/usePageVisibility";
 
 type BlinkState = "UNKNOWN" | "OPEN" | "CLOSING" | "CLOSED" | "OPENING";
 
@@ -118,6 +119,12 @@ export function useBlinkDetector(videoRef: RefObject<HTMLVideoElement>) {
   const MIN_CONSECUTIVE_FRAMES = 1;
   const NO_FACE_TIMEOUT = 3000; // ms
 
+  // 페이지 가시성 감지
+  const { isVisible } = usePageVisibility();
+
+  // 마지막 프레임 업데이트 시간
+  const lastUpdateTimeRef = useRef<number>(0);
+
   // FaceMesh 초기화
   const initMesh = useMemo(
     () => async () => {
@@ -142,36 +149,53 @@ export function useBlinkDetector(videoRef: RefObject<HTMLVideoElement>) {
       console.log(
         "videoRef.current is null, skipping blink detector initialization"
       );
-      return;
+      return () => {};
     }
 
-    const videoEl = videoRef.current;
     let cancelled = false;
-
-    // 상태 초기화
-    stateRef.current = "UNKNOWN";
-    stateStartTimeRef.current = Date.now();
-    consecutiveFramesRef.current = 0;
-    rLRef.current = 0;
-    rRRef.current = 0;
-
-    // 캘리브레이션 초기화
-    startedAtRef.current = Date.now();
-    windowStartRef.current = startedAtRef.current;
-    winMinRef.current = Number.POSITIVE_INFINITY;
-    winMaxRef.current = Number.NEGATIVE_INFINITY;
-    closeTRef.current = INIT_CLOSE_T;
-    openTRef.current = INIT_OPEN_T;
-    lastCalibratedAtRef.current = null;
+    const videoEl = videoRef.current;
 
     (async () => {
-      await initMesh();
-      if (!meshRef.current) {
-        console.error("FaceMesh is not initialized");
-        return;
-      }
+      if (cancelled) return;
+
+      // 상태 초기화
+      stateRef.current = "UNKNOWN";
+      stateStartTimeRef.current = Date.now();
+      consecutiveFramesRef.current = 0;
+      rLRef.current = 0;
+      rRRef.current = 0;
+
+      // 캘리브레이션 초기화
+      startedAtRef.current = Date.now();
+      windowStartRef.current = startedAtRef.current;
+      winMinRef.current = Number.POSITIVE_INFINITY;
+      winMaxRef.current = Number.NEGATIVE_INFINITY;
+      closeTRef.current = INIT_CLOSE_T;
+      openTRef.current = INIT_OPEN_T;
+      lastCalibratedAtRef.current = null;
+
+      // FaceMesh 초기화
+      const mesh = new FaceMesh({
+        locateFile: (file) => {
+          return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
+        },
+      });
+
+      meshRef.current = mesh;
+
+      // 설정
+      await mesh.setOptions({
+        maxNumFaces: 1,
+        refineLandmarks: true,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5,
+      });
+
+      // 결과 처리
       meshRef.current.onResults(
         (results: { multiFaceLandmarks?: { x: number; y: number }[][] }) => {
+          if (cancelled) return;
+
           const lm = results.multiFaceLandmarks?.[0];
           const now = Date.now();
 
@@ -322,7 +346,18 @@ export function useBlinkDetector(videoRef: RefObject<HTMLVideoElement>) {
       // 카메라 프레임 → FaceMesh로 보내기
       camRef.current = new Camera(videoEl, {
         onFrame: async () => {
-          if (!meshRef.current) return;
+          if (!meshRef.current || cancelled) return;
+
+          // 백그라운드에서는 프레임 처리 빈도 줄이기
+          if (!isVisible) {
+            // 백그라운드에서는 500ms마다 한 번씩만 처리
+            const now = Date.now();
+            if (now - lastUpdateTimeRef.current < 500) {
+              return;
+            }
+            lastUpdateTimeRef.current = now;
+          }
+
           await meshRef.current.send({ image: videoEl });
         },
         width: 1280,
@@ -341,7 +376,7 @@ export function useBlinkDetector(videoRef: RefObject<HTMLVideoElement>) {
       meshRef.current = null;
       if (rafId) cancelAnimationFrame(rafId);
     };
-  }, [initMesh, videoRef]);
+  }, [initMesh, videoRef, isVisible]);
 
   useEffect(() => {
     const cleanup = handleVideoRefChange();
