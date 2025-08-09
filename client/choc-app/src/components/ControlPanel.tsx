@@ -12,9 +12,11 @@ interface ControlPanelProps {
   mirrored: boolean;
   showFace: boolean;
   showCharacter: boolean;
+  showHUD: boolean;
   onMirroredChange: (mirrored: boolean) => void;
   onShowFaceChange: (showFace: boolean) => void;
   onShowCharacterChange: (showCharacter: boolean) => void;
+  onShowHUDChange: (showHUD: boolean) => void;
   onStopCamera: () => void;
   onStartCamera: () => void;
 }
@@ -30,9 +32,11 @@ export function ControlPanel({
   mirrored,
   showFace,
   showCharacter,
+  showHUD,
   onMirroredChange,
   onShowFaceChange,
   onShowCharacterChange,
+  onShowHUDChange,
   onStopCamera,
   onStartCamera,
 }: ControlPanelProps) {
@@ -106,7 +110,23 @@ export function ControlPanel({
       </div>
       <div>
         State:{" "}
-        <b style={{ color: getBlinkStateColor() }}>{getBlinkStateText()}</b>
+        <button
+          style={{
+            ...styles.stateButton,
+            backgroundColor: getBlinkStateColor(),
+            color: "white",
+            border: "none",
+            padding: "4px 8px",
+            borderRadius: "4px",
+            cursor: "pointer",
+            fontSize: "12px",
+            fontWeight: "bold",
+          }}
+          onClick={() => onShowHUDChange(!showHUD)}
+          title={showHUD ? "HUD 숨기기" : "HUD 보기"}
+        >
+          {getBlinkStateText()}
+        </button>
       </div>
       <div>
         Blinks: <b>{blinks}</b>
@@ -120,6 +140,11 @@ export function ControlPanel({
       </div>
       <div style={{ fontSize: 12, color: "#666" }}>
         완전한 깜빡임 사이클 감지 (뜸→감음→뜸)
+      </div>
+
+      {/* HUD 표시 상태 */}
+      <div style={{ fontSize: 11, color: "#888" }}>
+        HUD: {showHUD ? "🟢 표시" : "�� 숨김"}
       </div>
 
       {/* 설정 토글들 */}

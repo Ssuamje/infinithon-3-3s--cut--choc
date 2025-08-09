@@ -12,7 +12,7 @@ export interface UseDisplaySettingsReturn {
 
 export function useDisplaySettings(): UseDisplaySettingsReturn {
   const [mirrored, setMirrored] = useState(true);
-  const [showFace, setShowFace] = useState(true);
+  const [showFace, setShowFace] = useState(false); // 기본값을 false로 변경
   const [showCharacter, setShowCharacter] = useState(false);
 
   return {

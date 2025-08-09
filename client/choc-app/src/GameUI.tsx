@@ -6,10 +6,16 @@ interface GameUIProps {
   combo: number;
   score: number;
   isAlive: boolean;
-  revivalProgress: number;
-  revivalRequired: number;
-  onLoseHeart: () => void;
+  gamePhase: "idle" | "warning" | "danger" | "fever";
+  timeRemaining: number;
+  countdown: number | null;
+  isPaused: boolean;
+  showControlPanel: boolean;
   onResetGame: () => void;
+  onTogglePause: () => void;
+  onToggleControlPanel: () => void;
+  onToggleCamera: () => void;
+  isCameraOn: boolean;
 }
 
 export const GameUI: React.FC<GameUIProps> = ({
@@ -17,226 +23,483 @@ export const GameUI: React.FC<GameUIProps> = ({
   combo,
   score,
   isAlive,
-  revivalProgress,
-  revivalRequired,
-  onLoseHeart,
+  gamePhase,
+  timeRemaining,
+  countdown,
+  isPaused,
+  showControlPanel,
   onResetGame,
+  onTogglePause,
+  onToggleControlPanel,
+  onToggleCamera,
+  isCameraOn,
 }) => {
+  // 게임 페이즈에 따른 투명도와 스타일
+  const getPhaseStyles = () => {
+    switch (gamePhase) {
+      case "idle":
+        return {
+          opacity: 0.9,
+          backgroundColor: "rgba(33, 192, 116, 0.15)",
+          borderColor: "rgba(33, 192, 116, 0.4)",
+        };
+      case "warning":
+        return {
+          opacity: 0.95,
+          backgroundColor: "rgba(247, 183, 49, 0.2)",
+          borderColor: "rgba(247, 183, 49, 0.5)",
+        };
+      case "danger":
+        return {
+          opacity: 1.0,
+          backgroundColor: "rgba(255, 80, 80, 0.25)",
+          borderColor: "rgba(255, 80, 80, 0.7)",
+        };
+      case "fever":
+        return {
+          opacity: 0.95,
+          backgroundColor: "rgba(255, 107, 53, 0.25)",
+          borderColor: "rgba(255, 107, 53, 0.8)",
+        };
+      default:
+        return {
+          opacity: 0.9,
+          backgroundColor: "rgba(33, 192, 116, 0.15)",
+          borderColor: "rgba(33, 192, 116, 0.4)",
+        };
+    }
+  };
+
+  const phaseStyles = getPhaseStyles();
+  const timePercent = (timeRemaining / 6000) * 100;
+
   return (
-    <div style={styles.gameUI}>
-      {/* 상태 표시 */}
-      <div style={styles.statusRow}>
-        <div style={styles.statusItem}>
-          <span style={styles.label}>상태:</span>
-          <span
-            style={{
-              ...styles.statusValue,
-              color: isAlive ? "#21c074" : "#ff5050",
-            }}
-          >
-            {isAlive ? "생존" : "사망"}
-          </span>
-        </div>
-        <div style={styles.statusItem}>
-          <span style={styles.label}>점수:</span>
-          <span style={styles.scoreValue}>{score.toLocaleString()}</span>
-        </div>
-      </div>
-
-      {/* 하트 표시 */}
-      <div style={styles.heartsContainer}>
-        <span style={styles.label}>생명:</span>
-        <div style={styles.hearts}>
-          {[1, 2, 3].map((i) => (
-            <span
-              key={i}
-              style={{
-                ...styles.heart,
-                opacity: i <= hearts ? 1 : 0.3,
-                color: i <= hearts ? "#ff5050" : "#ccc",
-              }}
-            >
-              ❤️
-            </span>
-          ))}
-        </div>
-      </div>
-
-      {/* 콤보 표시 */}
-      {isAlive && combo > 0 && (
-        <div style={styles.comboContainer}>
-          <div
-            style={{
-              ...styles.combo,
-              transform: `scale(${Math.min(1.5, 1 + combo * 0.05)})`,
-              color: combo > 10 ? "#ff6b35" : combo > 5 ? "#f7b731" : "#21c074",
-            }}
-          >
-            {combo} COMBO!
+    <div style={styles.container}>
+      {/* 상단 상태바 HUD */}
+      <div
+        style={{
+          ...styles.statusBar,
+          ...phaseStyles,
+          animation: gamePhase === "fever" ? "feverPulse 2s infinite" : "none",
+        }}
+      >
+        {/* 왼쪽: 라이프와 콤보 */}
+        <div style={styles.leftSection}>
+          {/* 라이프 */}
+          <div style={styles.lifeContainer}>
+            {[1, 2, 3].map((i) => (
+              <span
+                key={i}
+                style={{
+                  ...styles.heart,
+                  opacity: i <= hearts ? 1 : 0.3,
+                  color: i <= hearts ? "#ff5050" : "#ccc",
+                }}
+              >
+                ❤️
+              </span>
+            ))}
           </div>
-          <div style={styles.comboMultiplier}>
-            x{Math.floor(combo / 5) + 1} 배율
-          </div>
-        </div>
-      )}
 
-      {/* 부활 진행도 */}
-      {!isAlive && (
-        <div style={styles.revivalContainer}>
-          <div style={styles.revivalTitle}>💀 부활까지</div>
-          <div style={styles.revivalBar}>
+          {/* 콤보 */}
+          {combo > 0 && (
+            <div style={styles.comboContainer}>
+              <div
+                style={{
+                  ...styles.combo,
+                  animation:
+                    gamePhase === "warning"
+                      ? "comboPulse 0.5s infinite"
+                      : "none",
+                }}
+              >
+                {combo}
+              </div>
+              <div style={styles.comboLabel}>콤보</div>
+            </div>
+          )}
+        </div>
+
+        {/* 중앙: 상태 점과 피버 배지 */}
+        <div style={styles.centerSection}>
+          {/* 상태 점 */}
+          <div style={styles.statusDot}>
             <div
               style={{
-                ...styles.revivalProgress,
-                width: `${(revivalProgress / revivalRequired) * 100}%`,
+                ...styles.dot,
+                backgroundColor:
+                  gamePhase === "idle"
+                    ? "#21c074"
+                    : gamePhase === "warning"
+                    ? "#f7b731"
+                    : gamePhase === "danger"
+                    ? "#ff5050"
+                    : "#ff6b35",
+                animation:
+                  gamePhase === "danger" ? "dangerPulse 1s infinite" : "none",
               }}
             />
           </div>
-          <div style={styles.revivalText}>
-            {revivalProgress} / {revivalRequired} 깜빡임
+
+          {/* 피버 배지 */}
+          {gamePhase === "fever" && (
+            <div style={styles.feverBadge}>
+              <span style={styles.feverText}>🔥 FEVER x5</span>
+            </div>
+          )}
+        </div>
+
+        {/* 오른쪽: 점수와 버튼들 */}
+        <div style={styles.rightSection}>
+          {/* 점수 */}
+          <div style={styles.scoreContainer}>
+            <span style={styles.score}>{score.toLocaleString()}</span>
+          </div>
+
+          {/* 버튼들 */}
+          <div style={styles.buttonContainer}>
+            {/* 카메라 토글 버튼 */}
+            <button
+              onClick={onToggleCamera}
+              style={{
+                ...styles.cameraButton,
+                backgroundColor: isCameraOn
+                  ? "rgba(255, 80, 80, 0.3)"
+                  : "rgba(33, 192, 116, 0.3)",
+                borderColor: isCameraOn
+                  ? "rgba(255, 80, 80, 0.6)"
+                  : "rgba(33, 192, 116, 0.6)",
+              }}
+              title={isCameraOn ? "카메라 끄기" : "카메라 켜기"}
+            >
+              {isCameraOn ? "📷" : "📷"}
+            </button>
+
+            {/* 일시정지 버튼 */}
+            <button
+              onClick={onTogglePause}
+              style={styles.pauseButton}
+              title={isPaused ? "게임 재개" : "게임 일시정지"}
+            >
+              {isPaused ? "▶️" : "⏸️"}
+            </button>
+
+            {/* ControlPanel 토글 버튼 */}
+            <button
+              onClick={onToggleControlPanel}
+              style={styles.controlPanelButton}
+              title={showControlPanel ? "설정 패널 숨기기" : "설정 패널 보기"}
+            >
+              {showControlPanel ? "⚙️" : "⚙️"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 타이머 게이지 - 상태바 아래에 별도로 표시 */}
+      <div style={styles.timerSection}>
+        <div style={styles.timerBar}>
+          <div
+            style={{
+              ...styles.timerProgress,
+              width: `${timePercent}%`,
+              backgroundColor:
+                gamePhase === "idle"
+                  ? "#21c074"
+                  : gamePhase === "warning"
+                  ? "#f7b731"
+                  : gamePhase === "danger"
+                  ? "#ff5050"
+                  : "#ff6b35",
+            }}
+          />
+        </div>
+
+        {/* 카운트다운 */}
+        {countdown !== null && (
+          <div style={styles.countdown}>
+            <span style={styles.countdownText}>{countdown}</span>
+            <div style={styles.countdownMessage}>지금 눈을 감아주세요!</div>
+          </div>
+        )}
+      </div>
+
+      {/* 게임 오버 화면 */}
+      {!isAlive && (
+        <div style={styles.gameOver}>
+          <div style={styles.gameOverContent}>
+            <h2 style={styles.gameOverTitle}>게임 오버</h2>
+            <p style={styles.gameOverScore}>
+              최종 점수: {score.toLocaleString()}
+            </p>
+            <button onClick={onResetGame} style={styles.restartButton}>
+              다시 시작
+            </button>
           </div>
         </div>
       )}
 
-      {/* 게임 컨트롤 버튼 */}
-      <div style={styles.controls}>
-        <button style={styles.dangerButton} onClick={onLoseHeart}>
-          하트 잃기 (테스트)
-        </button>
-        <button style={styles.resetButton} onClick={onResetGame}>
-          게임 리셋
-        </button>
-      </div>
+      {/* CSS 애니메이션 */}
+      <style>
+        {`
+          @keyframes comboPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+          }
+
+          @keyframes dangerPulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.8; }
+          }
+
+          @keyframes feverPulse {
+            0%, 100% { box-shadow: 0 0 20px rgba(255, 107, 53, 0.3); }
+            50% { box-shadow: 0 0 30px rgba(255, 107, 53, 0.6); }
+          }
+        `}
+      </style>
     </div>
   );
 };
 
 const styles: Record<string, React.CSSProperties> = {
-  gameUI: {
-    background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-    color: "white",
-    padding: "clamp(12px, 3vw, 20px)", // 반응형 padding
-    borderRadius: "clamp(8px, 2vw, 15px)", // 반응형 border-radius
-    marginBottom: "clamp(12px, 3vw, 20px)", // 반응형 margin
-    fontFamily: "system-ui, -apple-system, sans-serif",
-    boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
+  container: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    pointerEvents: "none",
+    zIndex: 1000,
   },
-  statusRow: {
+
+  // 상태바 스타일
+  statusBar: {
+    position: "absolute",
+    top: "20px",
+    left: "50%",
+    transform: "translateX(-50%)",
+    width: "90vw",
+    maxWidth: "800px",
+    padding: "12px 20px",
+    borderRadius: "20px",
+    border: "2px solid",
+    backdropFilter: "blur(15px)",
+    pointerEvents: "auto",
+    transition: "all 0.3s ease",
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: "clamp(10px, 2.5vw, 15px)", // 반응형 margin
+    boxShadow: "0 8px 32px rgba(0,0,0,0.1)",
   },
-  statusItem: {
+
+  leftSection: {
     display: "flex",
     alignItems: "center",
-    gap: "clamp(6px, 1.5vw, 8px)", // 반응형 gap
+    gap: "16px",
   },
-  label: {
-    fontSize: "clamp(12px, 2.5vw, 14px)", // 반응형 폰트 크기
-    fontWeight: 500,
-    opacity: 0.9,
-  },
-  statusValue: {
-    fontSize: "clamp(14px, 3vw, 16px)", // 반응형 폰트 크기
-    fontWeight: "bold",
-    textTransform: "uppercase",
-    letterSpacing: "1px",
-  },
-  scoreValue: {
-    fontSize: "clamp(18px, 4vw, 24px)", // 반응형 폰트 크기
-    fontWeight: "bold",
-    color: "#f7b731",
-    textShadow: "0 2px 4px rgba(0,0,0,0.3)",
-  },
-  heartsContainer: {
+
+  centerSection: {
     display: "flex",
     alignItems: "center",
-    gap: "clamp(6px, 2vw, 10px)", // 반응형 gap
-    marginBottom: "clamp(10px, 2.5vw, 15px)", // 반응형 margin
+    gap: "12px",
   },
-  hearts: {
+
+  rightSection: {
     display: "flex",
-    gap: "clamp(3px, 1vw, 5px)", // 반응형 gap
+    alignItems: "center",
+    gap: "16px",
   },
+
+  lifeContainer: {
+    display: "flex",
+    gap: "4px",
+  },
+
   heart: {
-    fontSize: "clamp(18px, 4vw, 24px)", // 반응형 폰트 크기
-    transition: "all 0.3s ease",
-    filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.3))",
+    fontSize: "18px",
+    filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.2))",
   },
+
   comboContainer: {
     textAlign: "center",
-    marginBottom: "clamp(10px, 2.5vw, 15px)", // 반응형 margin
-    animation: "pulse 0.5s ease-in-out",
   },
+
   combo: {
-    fontSize: "clamp(24px, 5vw, 32px)", // 반응형 폰트 크기
+    fontSize: "20px",
     fontWeight: "bold",
-    textShadow: "0 3px 6px rgba(0,0,0,0.4)",
-    transition: "all 0.3s ease",
-    marginBottom: "clamp(3px, 1vw, 5px)", // 반응형 margin
+    color: "#ff6b35",
+    textShadow: "0 2px 4px rgba(0,0,0,0.3)",
   },
-  comboMultiplier: {
-    fontSize: "clamp(11px, 2.5vw, 14px)", // 반응형 폰트 크기
-    opacity: 0.8,
-    fontWeight: "500",
+
+  comboLabel: {
+    fontSize: "10px",
+    color: "#666",
+    marginTop: "2px",
   },
-  revivalContainer: {
-    textAlign: "center",
-    marginBottom: "clamp(12px, 3vw, 20px)", // 반응형 margin
-    padding: "clamp(10px, 2.5vw, 15px)", // 반응형 padding
-    background: "rgba(0,0,0,0.2)",
-    borderRadius: "clamp(6px, 1.5vw, 10px)", // 반응형 border-radius
-  },
-  revivalTitle: {
-    fontSize: "clamp(14px, 3.5vw, 18px)", // 반응형 폰트 크기
-    fontWeight: "bold",
-    marginBottom: "clamp(6px, 1.5vw, 10px)", // 반응형 margin
-    color: "#ff5050",
-  },
-  revivalBar: {
-    width: "100%",
-    height: "clamp(6px, 1.5vw, 8px)", // 반응형 높이
-    background: "rgba(255,255,255,0.2)",
-    borderRadius: "clamp(3px, 1vw, 4px)", // 반응형 border-radius
-    overflow: "hidden",
-    marginBottom: "clamp(6px, 1.5vw, 8px)", // 반응형 margin
-  },
-  revivalProgress: {
-    height: "100%",
-    background: "linear-gradient(90deg, #ff5050, #ff6b35)",
-    borderRadius: "clamp(3px, 1vw, 4px)", // 반응형 border-radius
-    transition: "width 0.3s ease",
-  },
-  revivalText: {
-    fontSize: "clamp(11px, 2.5vw, 14px)", // 반응형 폰트 크기
-    fontWeight: "500",
-  },
-  controls: {
+
+  statusDot: {
     display: "flex",
-    gap: "clamp(6px, 2vw, 10px)", // 반응형 gap
+    alignItems: "center",
+  },
+
+  dot: {
+    width: "10px",
+    height: "10px",
+    borderRadius: "50%",
+    boxShadow: "0 2px 4px rgba(0,0,0,0.3)",
+  },
+
+  feverBadge: {
+    backgroundColor: "rgba(255, 107, 53, 0.9)",
+    color: "white",
+    padding: "4px 8px",
+    borderRadius: "12px",
+    fontSize: "10px",
+    fontWeight: "bold",
+  },
+
+  feverText: {
+    textShadow: "0 1px 2px rgba(0,0,0,0.3)",
+  },
+
+  scoreContainer: {
+    textAlign: "right",
+  },
+
+  score: {
+    fontSize: "16px",
+    fontWeight: "bold",
+    color: "#333",
+    textShadow: "0 1px 2px rgba(255,255,255,0.5)",
+  },
+
+  buttonContainer: {
+    display: "flex",
+    gap: "8px",
+  },
+
+  cameraButton: {
+    background: "rgba(255,255,255,0.2)",
+    border: "1px solid",
+    borderRadius: "8px",
+    padding: "8px",
+    fontSize: "14px",
+    cursor: "pointer",
+    transition: "all 0.2s ease",
+    backdropFilter: "blur(5px)",
+  },
+
+  pauseButton: {
+    background: "rgba(255,255,255,0.2)",
+    border: "1px solid rgba(255,255,255,0.3)",
+    borderRadius: "8px",
+    padding: "8px",
+    fontSize: "14px",
+    cursor: "pointer",
+    transition: "all 0.2s ease",
+    backdropFilter: "blur(5px)",
+  },
+
+  controlPanelButton: {
+    background: "rgba(255,255,255,0.2)",
+    border: "1px solid rgba(255,255,255,0.3)",
+    borderRadius: "8px",
+    padding: "8px",
+    fontSize: "14px",
+    cursor: "pointer",
+    transition: "all 0.2s ease",
+    backdropFilter: "blur(5px)",
+  },
+
+  // 타이머 섹션
+  timerSection: {
+    position: "absolute",
+    top: "100px",
+    left: "50%",
+    transform: "translateX(-50%)",
+    width: "90vw",
+    maxWidth: "800px",
+    pointerEvents: "none",
+  },
+
+  timerBar: {
+    width: "100%",
+    height: "6px",
+    backgroundColor: "rgba(0,0,0,0.1)",
+    borderRadius: "3px",
+    overflow: "hidden",
+    marginBottom: "8px",
+  },
+
+  timerProgress: {
+    height: "100%",
+    transition: "width 0.1s ease",
+    borderRadius: "3px",
+  },
+
+  countdown: {
+    textAlign: "center",
+    pointerEvents: "none",
+  },
+
+  countdownText: {
+    fontSize: "28px",
+    fontWeight: "bold",
+    color: "#ff5050",
+    textShadow: "0 2px 4px rgba(0,0,0,0.3)",
+    display: "block",
+  },
+
+  countdownMessage: {
+    fontSize: "12px",
+    color: "#ff5050",
+    fontWeight: "bold",
+    marginTop: "4px",
+  },
+
+  gameOver: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.8)",
+    display: "flex",
+    alignItems: "center",
     justifyContent: "center",
+    zIndex: 2000,
+    pointerEvents: "auto",
   },
-  dangerButton: {
-    padding: "clamp(6px 12px, 1.5vw 3vw, 8px 16px)", // 반응형 padding
-    background: "#ff5050",
+
+  gameOverContent: {
+    backgroundColor: "white",
+    padding: "32px",
+    borderRadius: "16px",
+    textAlign: "center",
+    boxShadow: "0 8px 32px rgba(0,0,0,0.3)",
+  },
+
+  gameOverTitle: {
+    margin: "0 0 16px",
+    color: "#ff5050",
+    fontSize: "24px",
+  },
+
+  gameOverScore: {
+    margin: "0 0 24px",
+    fontSize: "18px",
+    color: "#666",
+  },
+
+  restartButton: {
+    backgroundColor: "#21c074",
     color: "white",
     border: "none",
-    borderRadius: "clamp(4px, 1vw, 6px)", // 반응형 border-radius
-    fontSize: "clamp(10px, 2.5vw, 12px)", // 반응형 폰트 크기
-    fontWeight: "500",
+    padding: "12px 24px",
+    borderRadius: "8px",
+    fontSize: "16px",
     cursor: "pointer",
-    transition: "all 0.2s ease",
-  },
-  resetButton: {
-    padding: "clamp(6px 12px, 1.5vw 3vw, 8px 16px)", // 반응형 padding
-    background: "#21c074",
-    color: "white",
-    border: "none",
-    borderRadius: "clamp(4px, 1vw, 6px)", // 반응형 border-radius
-    fontSize: "clamp(10px, 2.5vw, 12px)", // 반응형 폰트 크기
-    fontWeight: "500",
-    cursor: "pointer",
-    transition: "all 0.2s ease",
+    transition: "background-color 0.2s ease",
   },
 };

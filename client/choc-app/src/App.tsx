@@ -6,6 +6,7 @@ import { useGameLogic } from "./useGameLogic";
 import { GameUI } from "./GameUI";
 import { VideoDisplay } from "./components/VideoDisplay";
 import { ControlPanel } from "./components/ControlPanel";
+import { useState } from "react";
 
 export default function App() {
   // 카메라 관련 로직
@@ -22,51 +23,80 @@ export default function App() {
     setShowCharacter,
   } = useDisplaySettings();
 
+  // HUD 표시 상태
+  const [showHUD, setShowHUD] = useState(true);
+
+  // ControlPanel 표시 상태
+  const [showControlPanel, setShowControlPanel] = useState(true);
+
   // 깜빡임 감지
   const blink = useBlinkDetector(videoRef);
 
   // 게임 로직
-  const { gameState, loseHeart, resetGame, revivalProgress, revivalRequired } =
-    useGameLogic(blink.blinks, blink.lastBlinkAt);
+  const { gameState, resetGame, togglePause } = useGameLogic(
+    blink.blinks,
+    blink.lastBlinkAt
+  );
 
   const isBlinking = blink.state === "CLOSED" || blink.state === "CLOSING";
 
+  // 카메라 표시 토글 함수 (스트림은 유지하고 화면만 숨김/표시)
+  const toggleCamera = () => {
+    if (showFace) {
+      setShowFace(false);
+    } else {
+      setShowFace(true);
+      // 카메라가 아직 시작되지 않았다면 시작
+      if (state !== "ready") {
+        startCamera();
+      }
+    }
+  };
+
   return (
     <div style={styles.wrap}>
-      <h1 style={styles.title}>🍫 초콜릿 깜빡임 게임</h1>
-
-      {/* 게임 UI */}
+      {/* 게임 UI - 항상 표시 */}
       <GameUI
         hearts={gameState.hearts}
         combo={gameState.combo}
         score={gameState.score}
         isAlive={gameState.isAlive}
-        revivalProgress={revivalProgress}
-        revivalRequired={revivalRequired}
-        onLoseHeart={loseHeart}
+        gamePhase={gameState.gamePhase}
+        timeRemaining={gameState.timeRemaining}
+        countdown={gameState.countdown}
+        isPaused={gameState.isPaused}
         onResetGame={resetGame}
+        onTogglePause={togglePause}
+        showControlPanel={showControlPanel}
+        onToggleControlPanel={() => setShowControlPanel(!showControlPanel)}
+        onToggleCamera={toggleCamera}
+        isCameraOn={showFace}
       />
 
-      {/* 컨트롤 패널 */}
-      <ControlPanel
-        state={state}
-        blinkState={blink.state}
-        blinks={blink.blinks}
-        ratioL={blink.ratioL}
-        ratioR={blink.ratioR}
-        closeT={blink.CLOSE_T}
-        openT={blink.OPEN_T}
-        mirrored={mirrored}
-        showFace={showFace}
-        showCharacter={showCharacter}
-        onMirroredChange={setMirrored}
-        onShowFaceChange={setShowFace}
-        onShowCharacterChange={setShowCharacter}
-        onStopCamera={stopCamera}
-        onStartCamera={() => startCamera()}
-      />
+      {/* 컨트롤 패널 - 토글 가능 */}
+      {showControlPanel && (
+        <ControlPanel
+          state={state}
+          blinkState={blink.state}
+          blinks={blink.blinks}
+          ratioL={blink.ratioL}
+          ratioR={blink.ratioR}
+          closeT={blink.CLOSE_T}
+          openT={blink.OPEN_T}
+          mirrored={mirrored}
+          showFace={showFace}
+          showCharacter={showCharacter}
+          showHUD={showHUD}
+          onMirroredChange={setMirrored}
+          onShowFaceChange={setShowFace}
+          onShowCharacterChange={setShowCharacter}
+          onShowHUDChange={setShowHUD}
+          onStopCamera={stopCamera}
+          onStartCamera={() => startCamera()}
+        />
+      )}
 
-      {/* 비디오/캐릭터 표시 */}
+      {/* 비디오/캐릭터 표시 - 항상 렌더링하되 내부에서 표시 제어 */}
       <VideoDisplay
         videoRef={videoRef}
         showFace={showFace}
@@ -94,6 +124,7 @@ const styles: Record<string, React.CSSProperties> = {
     minWidth: "320px",
     margin: "0 auto",
     boxSizing: "border-box",
+    background: "transparent", // 배경을 투명하게 설정
   },
   title: {
     margin: "0 0 12px",

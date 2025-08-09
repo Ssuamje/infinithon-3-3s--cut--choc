@@ -1,5 +1,5 @@
 // src/components/VideoDisplay.tsx
-import React from "react";
+import React, { useEffect } from "react";
 import { Character } from "./Character";
 
 interface VideoDisplayProps {
@@ -21,33 +21,70 @@ export function VideoDisplay({
   error,
   isBlinking,
 }: VideoDisplayProps) {
-  return (
-    <div style={styles.videoBox}>
-      {/* 얼굴 보기가 켜져있고 캐릭터가 꺼져있을 때만 비디오 표시 */}
-      {showFace && !showCharacter && (
+  // 카메라가 켜져있을 때만 비디오 표시
+  useEffect(() => {
+    if (videoRef.current && showFace) {
+      // 비디오 요소가 보이도록 설정
+      videoRef.current.style.display = "block";
+    } else if (videoRef.current) {
+      // 비디오 요소를 숨김 (깜빡임 감지는 계속 유지)
+      videoRef.current.style.display = "none";
+    }
+  }, [showFace, videoRef]);
+
+  // 둘 다 꺼져있을 때 VideoDisplay 자체를 숨김
+  if (!showFace && !showCharacter) {
+    return (
+      <div style={styles.videoBox}>
+        {/* 깜빡임 감지를 위한 숨겨진 비디오 요소 */}
         <video
           ref={videoRef}
           style={{
             ...styles.video,
             transform: mirrored ? "scaleX(-1)" : "none",
+            display: "none", // 완전히 숨김
           }}
           playsInline
           muted
           autoPlay
         />
-      )}
+
+        <div style={styles.emptyScreen}>
+          <div style={styles.emptyText}>
+            카메라 화면이 숨겨져있습니다
+            <br />
+            📷 버튼을 눌러 화면을 표시하세요
+            <br />
+            <br />
+            <span style={styles.blinkStatus}>
+              {ready && !error ? "👁️ 눈깜빡임 감지 중..." : ""}
+            </span>
+          </div>
+        </div>
+
+        {!ready && !error && <div style={styles.overlay}>카메라 준비 중…</div>}
+        {error && <div style={styles.overlay}>에러: {error}</div>}
+      </div>
+    );
+  }
+
+  return (
+    <div style={styles.videoBox}>
+      {/* 깜빡임 감지를 위한 비디오 요소 */}
+      <video
+        ref={videoRef}
+        style={{
+          ...styles.video,
+          transform: mirrored ? "scaleX(-1)" : "none",
+          display: showFace ? "block" : "none",
+        }}
+        playsInline
+        muted
+        autoPlay
+      />
 
       {/* 캐릭터 보기가 켜져있을 때 캐릭터 표시 */}
       {showCharacter && <Character isBlinking={isBlinking} />}
-
-      {/* 얼굴과 캐릭터 모두 꺼져있을 때 빈 화면 */}
-      {!showFace && !showCharacter && (
-        <div style={styles.emptyScreen}>
-          <div style={styles.emptyText}>
-            카메라와 캐릭터가 모두 꺼져있습니다
-          </div>
-        </div>
-      )}
 
       {!ready && !error && <div style={styles.overlay}>카메라 준비 중…</div>}
       {error && <div style={styles.overlay}>에러: {error}</div>}
@@ -95,5 +132,12 @@ const styles: Record<string, React.CSSProperties> = {
   emptyText: {
     color: "#fff",
     textAlign: "center",
+    lineHeight: "1.4",
+  },
+  blinkStatus: {
+    fontSize: "clamp(10px, 2.5vw, 12px)",
+    color: "#21c074",
+    fontWeight: "normal",
+    opacity: 0.8,
   },
 };
