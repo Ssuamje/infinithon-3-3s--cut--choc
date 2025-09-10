@@ -34,8 +34,15 @@ export default function App() {
   const [dangerOpacity, setDangerOpacity] = useState(1);
   const [showContextMenu, setShowContextMenu] = useState(false);
 
-  // 깜빡임 감지
-  const blink = useBlinkDetector(videoRef);
+  // 깜빡임 감지 (초기화 여부에 따라 활성화)
+  // 앱 시작 전 사용자가 'API 키 등록 여부'를 선택할 때까지
+  // 감지/카메라 초기화 같은 부하작업은 실행되지 않도록 `started` 플래그를 사용합니다.
+  const [started, setStarted] = useState(false);
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [tempApiKey, setTempApiKey] = useState(""); // 입력용 임시 상태
+
+  const blink = useBlinkDetector(videoRef, started);
 
   // 게임 로직
   const { gameState, resetGame, togglePause, restoreHeart, loseHeart } =
@@ -94,20 +101,29 @@ export default function App() {
 
   // 서버 URL
   const API_BASE =
-    (import.meta as any).env?.VITE_API_BASE || "http://10.99.13.19:8000";
+    (import.meta as any).env?.VITE_API_BASE || "http://localhost:8000";
 
   // 데이터 서버로 전송
   const sendBlinkData = async () => {
+    if (!apiKey) {
+      console.error("API Key가 필요합니다.");
+      return false;
+    }
+
     const payload = {
       id: "1",
       events,
       startedAt: startedAt.current,
       endedAt: new Date().toISOString(),
     };
+
     try {
       const res = await fetch(`${API_BASE}/blink-session`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`, // API 키 추가
+        },
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -122,8 +138,17 @@ export default function App() {
   // 처리 결과 가져오기(JSON: report, daily_blink_per_minute, daily_line_plot_b64)
   const [processed, setProcessed] = useState<any | null>(null);
   const fetchProcessed = async () => {
+    if (!apiKey) {
+      console.error("API Key가 필요합니다.");
+      return;
+    }
+
     try {
-      const res = await fetch(`${API_BASE}/processed-data/1`);
+      const res = await fetch(`${API_BASE}/processed-data/1`, {
+        headers: {
+          Authorization: `Bearer ${apiKey}`, // API 키 추가
+        },
+      });
       const json = await res.json();
       setProcessed(json);
       console.log("processed:", json);
@@ -153,36 +178,171 @@ export default function App() {
     )} / 최댓값: ${max.toFixed(3)} | 최근 갱신: ${lastTs}`;
   })();
 
+  useEffect(() => {
+    const savedApiKey = localStorage.getItem("apiKey");
+    if (savedApiKey) setApiKey(savedApiKey);
+  }, []);
+
+  const handleApiKeySave = async () => {
+    setApiKey(tempApiKey);
+    localStorage.setItem("apiKey", tempApiKey);
+    setShowApiKeyModal(false);
+
+    // 서버에 API Key 전달
+    try {
+      const res = await fetch(`${API_BASE}/register-apikey`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ api_key: tempApiKey }),
+      });
+      if (!res.ok) throw new Error("API Key 등록 실패");
+      // 필요하다면 서버 응답 처리
+    } catch (e) {
+      alert("서버에 API Key 등록 중 오류가 발생했습니다.");
+      setStarted(false);
+      return;
+    }
+
+    setStarted(true);
+  };
+
   return (
     <div style={styles.wrap}>
-      {/* 디버깅용 로그 (개발 중에만 표시) */}
-      {/* {process.env.NODE_ENV === "development" && (
+      {/* 시작 전 모달 */}
+      {!started && (
         <div
           style={{
             position: "fixed",
-            top: "10px",
-            right: "10px",
-            background: "rgba(0,0,0,0.8)",
-            color: "white",
-            padding: "8px",
-            fontSize: "12px",
-            zIndex: 10000,
-            fontFamily: "monospace",
+            inset: 0,
+            background: "rgba(0,0,0,0.6)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: 20,
           }}
         >
-          <div>Hearts: {gameState.hearts}/3</div>
-          <div>Game Time: {Math.floor(gameState.timeRemaining / 1000)}s</div>
-          <div>Raw Game Time: {gameState.timeRemaining}ms</div>
-          <div>Last Blink: {blink.lastBlinkAt ? "Yes" : "No"}</div>
-          <div>Current Time: {new Date().toLocaleTimeString()}</div>
-          <div>
-            Last Blink Time:{" "}
-            {blink.lastBlinkAt
-              ? new Date(blink.lastBlinkAt).toLocaleTimeString()
-              : "None"}
+          <div
+            style={{
+              width: 420,
+              maxWidth: "100%",
+              background: "#fff",
+              borderRadius: 8,
+              padding: 20,
+              boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
+              textAlign: "center",
+            }}
+          >
+            <h3 style={{ marginTop: 0 }}>시작하기 전에</h3>
+            <p style={{ color: "#444" }}>
+              오늘의 촉촉 리포트를 받으려면 Open AI API Key를 등록해주세요.
+            </p>
+            <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "center" }}>
+              <button
+                onClick={() => setShowApiKeyModal(true)}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: 6,
+                  border: "none",
+                  background: "#007BFF",
+                  color: "#fff",
+                  cursor: "pointer",
+                }}
+              >
+                API Key 등록하고 시작
+              </button>
+              <button
+                onClick={() => setStarted(true)}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: 6,
+                  border: "1px solid #ddd",
+                  background: "#f6f6f6",
+                  cursor: "pointer",
+                }}
+              >
+                나중에 등록하기
+              </button>
+            </div>
+            <p style={{ marginTop: 12, fontSize: 12, color: "#666" }}>
+              (API Key는 설정 필드에서 언제든 입력/저장 가능합니다.)
+            </p>
           </div>
         </div>
-      )} */}
+      )}
+
+      {/* API Key 입력 모달 */}
+      {showApiKeyModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.6)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 10000,
+            padding: 20,
+          }}
+        >
+          <div
+            style={{
+              width: 380,
+              maxWidth: "100%",
+              background: "#fff",
+              borderRadius: 8,
+              padding: 20,
+              boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
+              textAlign: "center",
+            }}
+          >
+            <h3 style={{ marginTop: 0 }}>API Key 입력</h3>
+            <input
+              type="text"
+              placeholder="API Key를 입력하세요"
+              value={tempApiKey}
+              onChange={(e) => setTempApiKey(e.target.value)}
+              style={{
+                padding: "8px",
+                borderRadius: 4,
+                border: "1px solid #ddd",
+                width: "100%",
+                marginBottom: 16,
+              }}
+            />
+            <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+              <button
+                onClick={handleApiKeySave}
+                disabled={!tempApiKey}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: 6,
+                  border: "none",
+                  background: tempApiKey ? "#007BFF" : "#ccc",
+                  color: "#fff",
+                  cursor: tempApiKey ? "pointer" : "not-allowed",
+                }}
+              >
+                저장하고 시작
+              </button>
+              <button
+                onClick={() => setShowApiKeyModal(false)}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: 6,
+                  border: "1px solid #ddd",
+                  background: "#f6f6f6",
+                  cursor: "pointer",
+                }}
+              >
+                취소
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 게임 UI */}
       <GameUI

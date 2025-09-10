@@ -5,24 +5,14 @@ import asyncio
 import pandas as pd
 import queue
 import base64
+import os
+import openai
 from datetime import datetime
 from typing import Dict
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-
-# (패키지/모듈 실행 모두 대응)
-try:
-    from .genai import analyze_tablet_data, generate_report 
-except Exception:
-    print("Error importing relative genai module. Trying absolute import.")
-    try:
-        from genai import analyze_tablet_data, generate_report
-    except Exception:
-        print("Error importing genai functions. Ensure genai directory is in the same directory or properly installed.")
-        analyze_tablet_data = None
-        generate_report = None
 
 class BlinkSession(BaseModel):
     id: str
@@ -46,7 +36,16 @@ for user_name, name in zip(
     ['판교 개발자 영진', '노모어피자 치즈크러스트', '애플 디톡스', '야근조아', '퇴근덕후', '김연진사생팬'],
     ['increase', 'decrease', 'stable', 'month', 'week', 'first']
 ):
-    history_store[name] = (user_name, pd.read_csv(f'data/blink_data_{name}.csv'))
+    history_store[name] = (user_name, pd.read_csv(f'data/blink_data_{name}.csv', index_col=0))
+
+class ApiKeyRequest(BaseModel):
+    api_key: str
+
+@app.post("/register-apikey")
+async def register_apikey(req: ApiKeyRequest):
+    os.environ["OPENAI_API_KEY"] = req.api_key
+    print("OPENAI_API_KEY 환경변수에 저장됨")
+    return {"message": "API Key registered"}
 
 async def cleanup_loop():
     """1시간 이상 된 항목 정리 루프 (백그라운드 태스크)"""
@@ -80,6 +79,16 @@ async def receive_blink_session(data: BlinkSession):
 
 @app.get("/processed-data/{request_id}")
 async def send_processed_data(request_id: str):
+    try:
+        from genai import analyze_tablet_data, generate_report
+    except openai.OpenAIError as oe:
+        print(f"OpenAI error during import: {oe}")
+        raise oe
+    except Exception as e:
+        print(f"Error importing genai functions: {e}")
+        analyze_tablet_data = None
+        generate_report = None
+
     saved = data_store.get(request_id)
     if not saved:
         return {"message": "No data found for the given request ID"}
@@ -102,6 +111,7 @@ async def send_processed_data(request_id: str):
         return report
     else:
         return {"message": "Analysis functions are not available."}
+
 # # ==== [VAD WS] 추가 시작 =========================================
 # from fastapi import WebSocket, WebSocketDisconnect
 # import numpy as np

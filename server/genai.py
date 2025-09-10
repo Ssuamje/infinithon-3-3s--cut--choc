@@ -234,6 +234,14 @@ def generate_report(raw_data: pd.DataFrame, user_info: dict = None) -> str:
     image = plot_blink_data(cleaned_data, date)
     daily_bpm = (cleaned_data.mean() if cleaned_data is not None and not cleaned_data.empty else 0)
 
+    if len(slided_data) == 0:
+        return {
+            "user_name": user_info.get('user_name', '사용자'),
+            "report": "오늘의 눈 깜빡임 기록이 충분하지 않아 분석을 진행할 수 없습니다. 더 많은 데이터를 수집한 후 다시 시도해주세요.",
+            "daily_blink_per_minute": daily_bpm,
+            "daily_line_plot": image,
+        }
+
     # Generate the report text
     analyzed = analyze_tablet_data(slided_data)
     report_text = generate_report_text(user_info=user_info, histories=analyzed)
